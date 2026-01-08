@@ -22,7 +22,8 @@ pub async fn init_database() -> anyhow::Result<DatabaseConnection> {
     }
 
     // 确保子目录存在
-    for subdir in ["cards", "thumbnails", "chatlogs", "worldbooks", "regex", "backups"] {
+    // Optimization: Only create directories that are actually used
+    for subdir in ["cards", "uploads"] {
         let subdir_path = data_path.join(subdir);
         if !subdir_path.exists() {
             std::fs::create_dir_all(&subdir_path)?;
