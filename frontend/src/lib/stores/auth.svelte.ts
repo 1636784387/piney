@@ -2,7 +2,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import { get } from 'svelte/store';
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:9696";
+import { API_BASE } from '$lib/api';
 
 class AuthStore {
     authenticated = $state(false);

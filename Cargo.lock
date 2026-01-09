@@ -3653,19 +3653,6 @@ name = "piney"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-shell",
- "tokio",
-]
-
-[[package]]
-name = "piney-backend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
  "argon2",
  "async-trait",
  "axum",
@@ -3695,6 +3682,22 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "webp",
+]
+
+[[package]]
+name = "piney-app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "migration",
+ "piney",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-shell",
+ "tokio",
 ]
 
 [[package]]

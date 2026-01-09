@@ -20,6 +20,7 @@
     import { processContentWithScripts, type RegexScript } from "$lib/utils/regexProcessor";
     import { isFrontend } from "$lib/utils/renderUtils";
     import { smartFilterTags, detectTags, sortTags, processTagNewlines } from "$lib/utils/tagFilter";
+    import { API_BASE } from "$lib/api";
 
     const historyId = $page.url.searchParams.get("history_id");
     const cardId = $page.params.id;
@@ -76,7 +77,7 @@
         
         // 1. Get Character Name & Regex
         try {
-            const cardRes = await fetch(`http://localhost:9696/api/cards/${cardId}`, {
+            const cardRes = await fetch(`${API_BASE}/api/cards/${cardId}`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (cardRes.ok) {
@@ -95,7 +96,7 @@
 
         // 2. Get History Metadata & Regex
         try {
-            const res = await fetch(`http://localhost:9696/api/cards/${cardId}/history`, {
+            const res = await fetch(`${API_BASE}/api/cards/${cardId}/history`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
@@ -153,7 +154,7 @@
             isLoading = true;
             try {
                 const token = localStorage.getItem("auth_token");
-                const res = await fetch(`http://localhost:9696/api/cards/${cardId}/history/${historyId}/content?page=${p}`, {
+                const res = await fetch(`${API_BASE}/api/cards/${cardId}/history/${historyId}/content?page=${p}`, {
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
                 });
                 
@@ -218,7 +219,7 @@
 
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch(`http://localhost:9696/api/cards/${cardId}/history/${historyId}/content?page=${p}`, {
+            const res = await fetch(`${API_BASE}/api/cards/${cardId}/history/${historyId}/content?page=${p}`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             
@@ -285,7 +286,7 @@
                 newline_tags: newlineTags
             });
             
-            await fetch(`http://localhost:9696/api/cards/${cardId}/history/${historyId}`, {
+            await fetch(`${API_BASE}/api/cards/${cardId}/history/${historyId}`, {
                 method: 'PATCH',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -652,12 +653,12 @@
                                             margin: 0;
                                             padding: 0;
                                             line-height: 1.8; 
-                                            color: #333; /* Default: dark text for light mode */
+                                            color: inherit; /* Inherit color from parent keys or set by class */
                                         }
-                                        @media (prefers-color-scheme: dark) {
-                                            body { color: #e0e0e0; }
-                                        }
-                                        /* Also check for .dark class on html (Tailwind dark mode) */
+                                        /* Default Light Mode Text */
+                                        html:not(.dark) body { color: #333; }
+
+                                        /* Dark Mode Text */
                                         html.dark body { color: #e0e0e0; }
                                         
                                         /* Inline Code */
@@ -685,7 +686,7 @@
                                             border-color: #333;
                                         }
                                         @media (prefers-color-scheme: dark) {
-                                            pre { background: #1e1e1e; border-color: #333; }
+                                            /* pre { background: #1e1e1e; border-color: #333; } Disabled */
                                         }
                                         
                                         /* Code inside Pre resets inline styles */

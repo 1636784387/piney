@@ -8,6 +8,7 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import * as AlertDialog from "$lib/components/ui/alert-dialog/index.js";
     import { cn } from "$lib/utils.js";
+    import { API_BASE, resolveUrl } from "$lib/api";
 
     // defined locally to avoid dependency issues, or import if available
     interface DeletedCard {
@@ -28,7 +29,7 @@
         loading = true;
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/trash/cards", {
+            const res = await fetch(`${API_BASE}/api/trash/cards`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
@@ -48,7 +49,7 @@
     async function restoreCard(id: string) {
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch(`/api/trash/cards/${id}/restore`, {
+            const res = await fetch(`${API_BASE}/api/trash/cards/${id}/restore`, {
                 method: "POST",
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
@@ -70,7 +71,7 @@
         if (!cardToDelete) return;
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch(`/api/trash/cards/${cardToDelete}`, {
+            const res = await fetch(`${API_BASE}/api/trash/cards/${cardToDelete}`, {
                 method: "DELETE",
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
@@ -162,7 +163,7 @@
                             class="w-10 h-14 rounded overflow-hidden bg-muted flex-shrink-0 relative border"
                         >
                             <img
-                                src={card.avatar || "/default.webp"}
+                                src={resolveUrl(card.avatar)}
                                 alt={card.name}
                                 class="w-full h-full object-cover grayscale opacity-70"
                             />

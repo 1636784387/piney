@@ -19,6 +19,7 @@
     import * as Card from "$lib/components/ui/card";
     import { toast } from "svelte-sonner";
     import { cn } from "$lib/utils";
+    import { API_BASE } from "$lib/api";
 
     let dragging = false;
     let uploading = false;
@@ -175,8 +176,8 @@
 
             const endpoint =
                 importType === "card"
-                    ? "/api/cards/import"
-                    : "/api/world_info/import";
+                    ? `${API_BASE}/api/cards/import`
+                    : `${API_BASE}/api/world_info/import`;
 
             const token = localStorage.getItem("auth_token");
             const headers: HeadersInit = {};

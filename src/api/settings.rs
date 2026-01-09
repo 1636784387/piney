@@ -132,7 +132,7 @@ pub async fn update(
                     // If same file (e.g. avatar.webp vs avatar.webp?t=2), do NOT delete
                     if let (Some(old_f), Some(new_f)) = (&old_clean, &new_clean) {
                         if old_f != new_f {
-                            let path = std::path::Path::new("data/uploads").join(old_f);
+                            let path = crate::utils::paths::get_data_path("uploads").join(old_f);
                             if path.exists() {
                                 if let Err(e) = std::fs::remove_file(&path) {
                                     tracing::warn!(
@@ -148,7 +148,7 @@ pub async fn update(
                     } else if let Some(old_f) = old_clean {
                         // case: new url is not local upload (e.g. empty)
                         if val_str.is_empty() {
-                            let path = std::path::Path::new("data/uploads").join(old_f);
+                            let path = crate::utils::paths::get_data_path("uploads").join(old_f);
                             if path.exists() {
                                 let _ = std::fs::remove_file(&path);
                             }

@@ -12,7 +12,7 @@
     import * as AlertDialog from "$lib/components/ui/alert-dialog";
     import { longpress } from "$lib/actions/longpress";
 
-    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:9696";
+    import { API_BASE } from "$lib/api";
 
     let items: any[] = $state([]);
     let loading = $state(true);

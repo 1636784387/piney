@@ -1,5 +1,6 @@
 //! 工具模块入口
 
+pub mod auth_middleware;
 pub mod error;
 pub mod mode_detect;
-pub mod auth_middleware;
+pub mod paths;

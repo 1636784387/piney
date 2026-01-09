@@ -10,7 +10,7 @@
     import { useUnsavedChanges } from "$lib/hooks/use-unsaved-changes.svelte";
     import UnsavedGuard from "$lib/components/common/UnsavedGuard.svelte";
 
-    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:9696";
+    import { API_BASE } from "$lib/api";
 
     let id = $page.params.id;
     let loading = $state(true);

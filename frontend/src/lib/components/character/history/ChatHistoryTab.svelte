@@ -6,6 +6,7 @@
     import HistoryCard from "./HistoryCard.svelte";
     import ImportHistoryDialog from "./ImportHistoryDialog.svelte";
     import { Skeleton } from "$lib/components/ui/skeleton";
+    import { API_BASE } from "$lib/api";
 
     let { cardId } = $props();
 
@@ -17,7 +18,7 @@
         if (!cardId) return;
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch(`http://localhost:9696/api/cards/${cardId}/history`, {
+            const res = await fetch(`${API_BASE}/api/cards/${cardId}/history`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
@@ -43,7 +44,7 @@
         histories = histories.filter(h => h.id !== id);
 
         const token = localStorage.getItem("auth_token");
-        fetch(`http://localhost:9696/api/cards/${cardId}/history/${id}`, { 
+        fetch(`${API_BASE}/api/cards/${cardId}/history/${id}`, { 
             method: 'DELETE',
             headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
@@ -72,7 +73,7 @@
         histories[idx] = { ...prev, ...payload };
         
         const token = localStorage.getItem("auth_token");
-        fetch(`http://localhost:9696/api/cards/${cardId}/history/${id}`, {
+        fetch(`${API_BASE}/api/cards/${cardId}/history/${id}`, {
             method: 'PATCH',
             headers: { 
                 'Content-Type': 'application/json',

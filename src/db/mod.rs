@@ -6,14 +6,12 @@ pub mod connection;
 
 use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
-use std::path::PathBuf;
 use tracing::info;
 
 /// 初始化数据库连接
 pub async fn init_database() -> anyhow::Result<DatabaseConnection> {
     // 获取数据目录
-    let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "./data".to_string());
-    let data_path = PathBuf::from(&data_dir);
+    let data_path = crate::utils::paths::get_data_dir();
 
     // 确保数据目录存在
     if !data_path.exists() {

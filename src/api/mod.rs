@@ -71,8 +71,6 @@ pub fn routes(db: DatabaseConnection) -> Router {
                 .patch(world_info::update)
                 .delete(world_info::delete),
         )
-        // 健康检查
-        .route("/health", get(|| async { "OK" }))
         // AI
         .route(
             "/ai/channels",

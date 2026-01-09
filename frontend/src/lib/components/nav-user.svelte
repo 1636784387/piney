@@ -14,6 +14,7 @@
 	import { auth } from "$lib/stores/auth.svelte";
 	import { settings } from "$lib/stores/settings.svelte";
 	import UserProfileDialog from "$lib/components/user-profile-dialog.svelte";
+	import { resolveUrl } from "$lib/api";
 
 	let { user }: { user: { name: string; avatar: string } } = $props();
 	const sidebar = useSidebar();
@@ -50,7 +51,7 @@
 						{...props}
 					>
 						<Avatar.Root class="size-8 rounded-full">
-							<Avatar.Image src={user.avatar} alt={user.name} />
+							<Avatar.Image src={resolveUrl(user.avatar)} alt={user.name} />
 							<Avatar.Fallback class="rounded-full"
 								>{user.name?.[0]?.toUpperCase() ||
 									"A"}</Avatar.Fallback
@@ -77,7 +78,7 @@
 						class="flex items-center gap-2 px-1 py-1.5 text-start text-sm"
 					>
 						<Avatar.Root class="size-8 rounded-full">
-							<Avatar.Image src={user.avatar} alt={user.name} />
+							<Avatar.Image src={resolveUrl(user.avatar)} alt={user.name} />
 							<Avatar.Fallback class="rounded-full"
 								>{user.name?.[0]?.toUpperCase() ||
 									"A"}</Avatar.Fallback

@@ -12,6 +12,7 @@
 	import { cn } from "$lib/utils.js";
 	import type { HTMLAttributes } from "svelte/elements";
 	import { auth } from "$lib/stores/auth.svelte";
+	import { API_BASE } from "$lib/api";
 
 	let { class: className, ...restProps }: HTMLAttributes<HTMLDivElement> =
 		$props();
@@ -28,7 +29,7 @@
 		loading = true;
 
 		try {
-			const res = await fetch("http://localhost:9696/api/auth/login", {
+			const res = await fetch(`${API_BASE}/api/auth/login`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ username, password }),

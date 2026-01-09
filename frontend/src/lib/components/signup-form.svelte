@@ -5,6 +5,7 @@
     import { Input } from "$lib/components/ui/input/index.js";
     import type { ComponentProps } from "svelte";
     import { auth } from "$lib/stores/auth.svelte";
+    import { API_BASE } from "$lib/api";
 
     let { ...restProps }: ComponentProps<typeof Card.Root> = $props();
 
@@ -30,7 +31,7 @@
 
         loading = true;
         try {
-            const res = await fetch("http://localhost:9696/api/auth/setup", {
+            const res = await fetch(`${API_BASE}/api/auth/setup`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ username, password }),

@@ -9,6 +9,7 @@
     import { Tabs, TabsContent, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
     import { Loader2 } from "lucide-svelte";
     import { convertCharacterBookToGlobal, type CharacterBookEntry, type GlobalWorldInfo } from "$lib/worldInfoConverter";
+    import { API_BASE } from "$lib/api";
 
     let { open = $bindable(false), entries } = $props<{
         open: boolean;
@@ -28,7 +29,7 @@
     async function loadWorldInfos() {
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/world_info", {
+            const res = await fetch(`${API_BASE}/api/world_info`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
@@ -88,7 +89,7 @@
                 
                 // Upload
                 const token = localStorage.getItem("auth_token");
-                const res = await fetch("/api/world_info/import", {
+                const res = await fetch(`${API_BASE}/api/world_info/import`, {
                     method: "POST",
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
                     body: formData
@@ -103,7 +104,7 @@
                 const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
                 // Update existing: Fetch first to merge
-                const getRes = await fetch(`/api/world_info/${selectedExistingId}`, { headers });
+                const getRes = await fetch(`${API_BASE}/api/world_info/${selectedExistingId}`, { headers });
                 if (!getRes.ok) throw new Error("Failed to fetch existing world info");
                 const existingData = await getRes.json();
                 
@@ -156,7 +157,7 @@
                 }
 
                 // Push Update
-                const updateRes = await fetch(`/api/world_info/${selectedExistingId}`, {
+                const updateRes = await fetch(`${API_BASE}/api/world_info/${selectedExistingId}`, {
                     method: "PATCH",
                     headers: { 
                         "Content-Type": "application/json",

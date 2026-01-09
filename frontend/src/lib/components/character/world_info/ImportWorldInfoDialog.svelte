@@ -7,6 +7,7 @@
     import { Loader2 } from "lucide-svelte";
     import { onMount } from "svelte";
     import { convertGlobalToCharacterBook, type CharacterBookEntry, type GlobalWorldInfo } from "$lib/worldInfoConverter";
+    import { API_BASE } from "$lib/api";
 
     let { open = $bindable(false), onImport } = $props<{
         open: boolean;
@@ -24,7 +25,7 @@
         loading = true;
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/world_info", {
+            const res = await fetch(`${API_BASE}/api/world_info`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
@@ -42,7 +43,7 @@
         loading = true;
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch(`/api/world_info/${id}`, {
+            const res = await fetch(`${API_BASE}/api/world_info/${id}`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {

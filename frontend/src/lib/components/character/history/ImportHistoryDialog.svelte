@@ -7,6 +7,7 @@
     import { toast } from "svelte-sonner";
     import { cn } from "$lib/utils";
     import { convertJsonlToTxt, scanTags } from "$lib/utils/exportUtils";
+    import { API_BASE } from "$lib/api";
 
     let { open = $bindable(false), onImport, cardId } = $props();
 
@@ -147,7 +148,7 @@
             }
 
             const token = localStorage.getItem("auth_token");
-            const res = await fetch(`http://localhost:9696/api/cards/${cardId}/history`, {
+            const res = await fetch(`${API_BASE}/api/cards/${cardId}/history`, {
                 method: 'POST',
                 headers: {
                    ...(token ? { Authorization: `Bearer ${token}` } : {}),

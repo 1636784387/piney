@@ -14,6 +14,7 @@
 
     import * as AlertDialog from "$lib/components/ui/alert-dialog";
     import { longpress } from "$lib/actions/longpress";
+    import { API_BASE, resolveUrl } from "$lib/api";
     import { breadcrumbs } from "$lib/stores/breadcrumb";
     import {
         Search,
@@ -88,7 +89,7 @@
     async function fetchCategories() {
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/categories", {
+            const res = await fetch(`${API_BASE}/api/categories`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
@@ -102,7 +103,7 @@
     async function fetchCards() {
         try {
             const token = localStorage.getItem("auth_token");
-            let url = "/api/cards";
+            let url = `${API_BASE}/api/cards`;
             const params = new URLSearchParams();
             if (selectedCategoryId)
                 params.set("category_id", selectedCategoryId);
@@ -138,7 +139,7 @@
         }
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/categories", {
+            const res = await fetch(`${API_BASE}/api/categories`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -163,7 +164,7 @@
     async function updateCategory(id: string, name: string) {
         try {
             const token = localStorage.getItem("auth_token");
-            await fetch(`/api/categories/${id}`, {
+            await fetch(`${API_BASE}/api/categories/${id}`, {
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
@@ -192,7 +193,7 @@
 
         try {
             const token = localStorage.getItem("auth_token");
-            await fetch(`/api/categories/${id}`, {
+            await fetch(`${API_BASE}/api/categories/${id}`, {
                 method: "DELETE",
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
@@ -207,7 +208,7 @@
     async function toggleCoverBlur(card: CardItem) {
         try {
             const token = localStorage.getItem("auth_token");
-            await fetch(`/api/cards/${card.id}`, {
+            await fetch(`${API_BASE}/api/cards/${card.id}`, {
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
@@ -264,7 +265,7 @@
     async function saveOrder(ids: string[]) {
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/categories/reorder", {
+            const res = await fetch(`${API_BASE}/api/categories/reorder`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -311,7 +312,7 @@
                 Array.from(selectedCardIds),
                 targetCategoryId,
             );
-            const res = await fetch("/api/cards/batch/category", {
+            const res = await fetch(`${API_BASE}/api/cards/batch/category`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -361,7 +362,7 @@
         if (isBatchDeleteArgs) {
             try {
                 const token = localStorage.getItem("auth_token");
-                const res = await fetch("/api/cards/batch/delete", {
+                const res = await fetch(`${API_BASE}/api/cards/batch/delete`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -383,7 +384,7 @@
         } else if (cardToDelete) {
             try {
                 const token = localStorage.getItem("auth_token");
-                const res = await fetch(`/api/cards/${cardToDelete}`, {
+                const res = await fetch(`${API_BASE}/api/cards/${cardToDelete}`, {
                     method: "DELETE",
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
                 });
@@ -743,6 +744,8 @@
                 <ContextMenu.Root>
                     <ContextMenu.Trigger>
                         <div
+                            role="button"
+                            tabindex="0"
                             class="group relative rounded-2xl overflow-hidden bg-card shadow-md hover:shadow-xl transition-all duration-200 hover:-translate-y-1 cursor-pointer"
                             class:ring-2={isSelectionMode &&
                                 selectedCardIds.has(card.id)}
@@ -752,6 +755,13 @@
                                 isSelectionMode
                                     ? toggleCardSelection(card.id)
                                     : goto(`/characters/${card.id}`)}
+                            onkeydown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    isSelectionMode
+                                        ? toggleCardSelection(card.id)
+                                        : goto(`/characters/${card.id}`);
+                                }
+                            }}
                             use:longpress
                             onlongpress={(e) => {
                                 const original = e.detail.originalEvent;
@@ -771,7 +781,7 @@
                             <!-- 封面图容器 -->
                             <div class="aspect-[2/3] relative overflow-hidden">
                                 <img
-                                    src={card.avatar ? `${card.avatar}?v=${new Date(card.updated_at).getTime()}` : "/default.webp"}
+                                    src={resolveUrl(card.avatar ? `${card.avatar}?v=${new Date(card.updated_at).getTime()}` : "/default.webp")}
                                     alt={card.name}
                                     class={cn(
                                         "w-full h-full object-cover",
@@ -970,6 +980,8 @@
                 <ContextMenu.Root>
                     <ContextMenu.Trigger>
                         <div
+                            role="button"
+                            tabindex="0"
                             class={cn(
                                 "flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors",
                                 isSelectionMode &&
@@ -980,13 +992,20 @@
                                 isSelectionMode
                                     ? toggleCardSelection(card.id)
                                     : null}
+                            onkeydown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    isSelectionMode
+                                        ? toggleCardSelection(card.id)
+                                        : null;
+                                }
+                            }}
                         >
                             <!-- 缩略图 -->
                             <div
                                 class="w-10 h-14 rounded overflow-hidden bg-muted flex-shrink-0"
                             >
                                 <img
-                                    src={card.avatar || "/default.webp"}
+                                    src={resolveUrl(card.avatar)}
                                     alt={card.name}
                                     class={cn(
                                         "w-full h-full object-cover",

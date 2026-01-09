@@ -27,9 +27,9 @@ pub async fn upload_image(
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     // Ensure upload directory exists
-    let upload_dir = "data/uploads";
-    if !Path::new(upload_dir).exists() {
-        fs::create_dir_all(upload_dir)
+    let upload_dir = crate::utils::paths::get_data_path("uploads");
+    if !Path::new(&upload_dir).exists() {
+        fs::create_dir_all(&upload_dir)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
@@ -74,8 +74,8 @@ pub async fn upload_image(
                 let encoder = webp::Encoder::from_rgba(&rgba, w, h);
                 let memory = encoder.encode(75.0); // 75% quality lossy
 
-                let path = Path::new("data/uploads/avatar.webp");
-                std::fs::write(path, &*memory)
+                let path = crate::utils::paths::get_data_path("uploads/avatar.webp");
+                std::fs::write(&path, &*memory)
                     .map_err(|e| format!("Failed to save webp: {}", e))?;
 
                 Ok::<_, String>(format!("/uploads/avatar.webp?t={}", timestamp))
@@ -101,7 +101,7 @@ pub async fn upload_image(
 
             // Generate unique filename
             let new_filename = format!("{}.{}", Uuid::new_v4(), extension);
-            let file_path = Path::new(upload_dir).join(&new_filename);
+            let file_path = upload_dir.join(&new_filename);
 
             // Save file
             fs::write(&file_path, data)

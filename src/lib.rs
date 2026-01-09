@@ -29,7 +29,8 @@ pub async fn create_app(db: DatabaseConnection, mode: RunMode, config: ConfigSta
     // Public routes (Auth + Public Settings)
     let public_api = Router::new()
         .nest("/auth", auth::router(config.clone()))
-        .route("/settings", get(api::settings::get).with_state(db.clone()));
+        .route("/settings", get(api::settings::get).with_state(db.clone()))
+        .route("/health", get(|| async { "OK" }));
 
     // Protected routes
     let protected_api = api::routes(db.clone()).layer(middleware::from_fn_with_state(
@@ -47,9 +48,12 @@ pub async fn create_app(db: DatabaseConnection, mode: RunMode, config: ConfigSta
     // Serve uploaded files
     app = app.nest_service(
         "/uploads",
-        tower_http::services::ServeDir::new("data/uploads"),
+        tower_http::services::ServeDir::new(crate::utils::paths::get_data_path("uploads")),
     );
-    app = app.nest_service("/cards", tower_http::services::ServeDir::new("data/cards"));
+    app = app.nest_service(
+        "/cards",
+        tower_http::services::ServeDir::new(crate::utils::paths::get_data_path("cards")),
+    );
 
     // Server Mode 下托管静态文件
     if mode == RunMode::Server {

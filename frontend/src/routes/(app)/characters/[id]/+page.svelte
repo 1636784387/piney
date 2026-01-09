@@ -48,7 +48,7 @@
     import RegexTab from "$lib/components/character/regex/RegexTab.svelte";
     import ChatHistoryTab from "$lib/components/character/history/ChatHistoryTab.svelte";
 
-    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:9696";
+    import { API_BASE, resolveUrl } from "$lib/api";
     let cardId = $page.params.id;
     let card: any = null;
     let loading = true;
@@ -680,7 +680,7 @@
                                 class="aspect-[2/3] w-full rounded-xl overflow-hidden border bg-muted shadow-sm relative group"
                             >
                                 <img
-                                    src={`${card.avatar || "/default.webp"}?t=${avatarKey}`}
+                                    src={resolveUrl(`${card.avatar || "/default.webp"}?t=${avatarKey}`)}
                                     alt="封面"
                                     class={cn(
                                         "w-full h-full object-cover transition-transform duration-500 group-hover:scale-105",

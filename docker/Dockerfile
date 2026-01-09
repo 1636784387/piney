@@ -58,6 +58,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libwebp-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制后端二进制文件

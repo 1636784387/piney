@@ -58,7 +58,7 @@ async-trait = "0.1"
 
 # ==================== 后端服务 Package ====================
 [package]
-name = "piney-backend"
+name = "piney"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

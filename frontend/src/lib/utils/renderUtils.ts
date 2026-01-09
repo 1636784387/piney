@@ -256,20 +256,14 @@ const dark_mode_sync_script = `
 `;
 
 // Section 6.2: Create Src Content
-export function createSrcContent(content: string, useBlobUrl: boolean = false): string {
+// Section 6.2: Create Src Content
+export function createSrcContent(content: string, useBlobUrl: boolean = false, isDark: boolean = false): string {
     content = replaceVhInContent(content);
 
-    // Detect dark mode from main document at build time (for initial load)
-    let initialDarkClass = '';
-    try {
-        if (typeof window !== 'undefined') {
-            const isDark = document.documentElement.classList.contains('dark') ||
-                window.matchMedia('(prefers-color-scheme: dark)').matches;
-            if (isDark) initialDarkClass = ' class="dark"';
-        }
-    } catch (e) { }
+    // Use passed isDark parameter to set the class directly
+    const initialDarkClass = isDark ? ' class="dark"' : '';
 
-    return `
+    return `<!DOCTYPE html>
 <html${initialDarkClass}>
 <head>
 <meta charset="utf-8">
@@ -278,7 +272,8 @@ ${useBlobUrl ? `<base href="${window.location.origin}"/>` : ''}
 <style>
 :root { color-scheme: light dark; }
 *,*::before,*::after{box-sizing:border-box;}
-html,body{margin:0!important;padding:0;overflow:hidden!important;max-width:100%!important;background:transparent!important;}
+html{background-color:transparent !important;}
+body{margin:0!important;padding:0;overflow:hidden!important;max-width:100%!important;background-color:transparent!important;}
 .user_avatar,.user-avatar{background-image:url('${getUserAvatarPath()}')}
 .char_avatar,.char-avatar{background-image:url('${getCharAvatarPath()}')}
 </style>

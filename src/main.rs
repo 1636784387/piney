@@ -28,8 +28,11 @@ async fn main() -> anyhow::Result<()> {
     info!("运行模式: {:?}", mode);
 
     // 初始化 Config
-    let config_path =
-        std::env::var("CONFIG_FILE").unwrap_or_else(|_| "data/config.yml".to_string());
+    let config_path = std::env::var("CONFIG_FILE").unwrap_or_else(|_| {
+        piney::utils::paths::get_data_path("config.yml")
+            .to_string_lossy()
+            .to_string()
+    });
     let config = ConfigState::new(&config_path);
     info!(
         "配置初始化完成 (路径: {}, 已加载: {})",

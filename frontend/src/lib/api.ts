@@ -7,14 +7,37 @@
  */
 
 // API 基础路径
-const getApiBase = (): string => {
+export const getApiBase = (): string => {
     // 检测是否在 Tauri 环境
     if (typeof window !== 'undefined' && (window as any).__TAURI__) {
         return 'http://localhost:9696';
     }
-    // 开发环境或 Docker 模式
+    // 开发环境或 Docker 模式建议使用相对路径
     return '';
 };
+
+export const API_BASE = getApiBase();
+
+/**
+ * 智能解析 URL
+ * 如果是以 /api 开头的相对路径，则根据环境补全 API_BASE
+ */
+export function resolveUrl(url: string | null | undefined): string {
+    if (!url) return "/default.webp";
+    if (
+        url.startsWith("http://") ||
+        url.startsWith("https://") ||
+        url.startsWith("data:") ||
+        url.startsWith("blob:")
+    ) {
+        return url;
+    }
+    // 如果是 /api, /cards, /uploads 开头的路径，且没有 API_BASE 前缀，则补全
+    if (url.startsWith("/api") || url.startsWith("/cards") || url.startsWith("/uploads")) {
+        return `${API_BASE}${url}`;
+    }
+    return url;
+}
 
 // 请求选项类型
 interface RequestOptions {

@@ -212,7 +212,7 @@
     }
     
     // API BASE fallback
-    const API_BASE = "http://localhost:9696";
+    import { API_BASE } from "$lib/api";
 
 </script>
 

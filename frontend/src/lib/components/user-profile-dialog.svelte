@@ -6,6 +6,7 @@
     import { Label } from "$lib/components/ui/label/index.js";
     import { toast } from "svelte-sonner";
     import { auth } from "$lib/stores/auth.svelte"; // Assuming auth store is here
+    import { API_BASE, resolveUrl } from "$lib/api";
 
     let { open = $bindable(false), user = { name: "", avatar: "" } } = $props();
 
@@ -35,7 +36,7 @@
         loading = true;
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/settings", {
+            const res = await fetch(`${API_BASE}/api/settings`, {
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
@@ -71,7 +72,7 @@
 
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/upload", {
+            const res = await fetch(`${API_BASE}/api/upload`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -105,7 +106,7 @@
         loading = true;
         try {
             const token = localStorage.getItem("auth_token");
-            const res = await fetch("/api/auth/profile", {
+            const res = await fetch(`${API_BASE}/api/auth/profile`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -164,7 +165,7 @@
             <Tabs.Content value="profile" class="space-y-4 py-4">
                 <div class="flex flex-col justify-center items-center gap-4">
                     <img
-                        src={avatarUrl}
+                        src={resolveUrl(avatarUrl)}
                         alt="Avatar"
                         class="h-24 w-24 rounded-full object-cover border"
                     />

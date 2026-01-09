@@ -1,5 +1,5 @@
 <script lang="ts">
-    // import { auth } from "$lib/stores/auth.svelte"; // Remove store import if verified unused or keep for other things
+    import { API_BASE } from "$lib/api";
 
     let fileInput: HTMLInputElement;
     let logs: string[] = [];
@@ -27,8 +27,8 @@
                 return;
             }
 
-            // 使用 relative path，依靠 Vite proxy 转发
-            const res = await fetch(`/api/cards/debug_import`, {
+            // 使用 API_BASE 支持 Tauri 兼容性
+            const res = await fetch(`${API_BASE}/api/cards/debug_import`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,

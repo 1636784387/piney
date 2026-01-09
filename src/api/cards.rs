@@ -12,7 +12,6 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::Cursor;
-use std::path::Path as StdPath;
 use tokio::fs;
 use tracing::warn;
 use uuid::Uuid;
@@ -38,9 +37,9 @@ async fn process_import(
     db: DatabaseConnection,
     mut multipart: Multipart,
 ) -> Result<Json<Vec<ImportResult>>, (StatusCode, String)> {
-    let storage_dir = "data/cards";
-    if !StdPath::new(storage_dir).exists() {
-        fs::create_dir_all(storage_dir)
+    let storage_dir = crate::utils::paths::get_data_path("cards");
+    if !storage_dir.exists() {
+        fs::create_dir_all(&storage_dir)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
@@ -69,10 +68,9 @@ async fn process_import(
         let is_png = content_type == "image/png" || file_name.to_lowercase().ends_with(".png");
         let is_json =
             content_type == "application/json" || file_name.to_lowercase().ends_with(".json");
-
         if is_png {
             // 处理 PNG 角色卡
-            match process_png_card(&data, storage_dir).await {
+            match process_png_card(&data, storage_dir.clone()).await {
                 Ok((uuid, json_str)) => {
                     // 头像路径指向版本化文件夹中的缩略图 (v1)
                     let avatar_path = format!("/cards/{}/v1_thumbnail.webp", uuid);
@@ -133,7 +131,7 @@ async fn process_import(
                     let uuid = Uuid::new_v4();
 
                     // 为 JSON 卡片也创建专属目录，方便后续添加封面
-                    let card_path = StdPath::new(storage_dir).join(uuid.to_string());
+                    let card_path = storage_dir.join(uuid.to_string());
                     if !card_path.exists() {
                         if let Err(e) = fs::create_dir_all(&card_path).await {
                             results.push(ImportResult {
@@ -184,7 +182,10 @@ async fn process_import(
     Ok(Json(results))
 }
 
-async fn process_png_card(data: &[u8], storage_dir: &str) -> Result<(Uuid, String), String> {
+async fn process_png_card(
+    data: &[u8],
+    storage_dir: std::path::PathBuf,
+) -> Result<(Uuid, String), String> {
     // 1. 手动解析 PNG Chunks (参考 user 提供的可靠逻辑)
     // 这种方法不依赖外部库对 chunk 顺序的严格校验，更健壮
     let mut extracted_json: Option<String> = None;
@@ -274,7 +275,7 @@ async fn process_png_card(data: &[u8], storage_dir: &str) -> Result<(Uuid, Strin
 
     // 2. 生成 UUID 并创建专属文件夹
     let uuid = Uuid::new_v4();
-    let card_dir = StdPath::new(storage_dir).join(uuid.to_string());
+    let card_dir = storage_dir.join(uuid.to_string());
 
     if !card_dir.exists() {
         fs::create_dir_all(&card_dir)
@@ -425,10 +426,10 @@ pub async fn debug_import(
 
     logs.push("开始处理调试导入请求...".to_string());
 
-    let storage_dir = "data/cards";
-    if !StdPath::new(storage_dir).exists() {
-        match fs::create_dir_all(storage_dir).await {
-            Ok(_) => logs.push(format!("创建存储目录 {} 成功", storage_dir)),
+    let storage_dir = crate::utils::paths::get_data_path("cards");
+    if !storage_dir.exists() {
+        match fs::create_dir_all(&storage_dir).await {
+            Ok(_) => logs.push(format!("创建存储目录 {:?} 成功", storage_dir)),
             Err(e) => {
                 let msg = format!("创建存储目录失败: {}", e);
                 logs.push(msg.clone());
@@ -961,8 +962,8 @@ pub async fn update_cover(
             .await
             .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-        let storage_dir = format!("data/cards/{}", id);
-        if !StdPath::new(&storage_dir).exists() {
+        let storage_dir = crate::utils::paths::get_data_path(&format!("cards/{}", id));
+        if !storage_dir.exists() {
             fs::create_dir_all(&storage_dir)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -978,7 +979,7 @@ pub async fn update_cover(
 
         // 1. Save as Source PNG (v1_source.png)
         let png_name = "v1_source.png";
-        let png_path = std::path::Path::new(&storage_dir).join(png_name);
+        let png_path = storage_dir.join(png_name);
 
         // Write RESIZED image to PNG
         let mut png_data = Vec::new();
@@ -1013,7 +1014,7 @@ pub async fn update_cover(
             encoder.encode(85.0).to_vec()
         };
 
-        let file_path = format!("{}/v1_thumbnail.webp", storage_dir); // Keeping naming convention
+        let file_path = storage_dir.join("v1_thumbnail.webp"); // Keeping naming convention
         fs::write(&file_path, &*webp_data).await.map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -1050,8 +1051,8 @@ pub async fn export_card(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Card not found".to_string()))?;
 
-    let storage_dir = format!("data/cards/{}", id);
-    let png_path = std::path::Path::new(&storage_dir).join("v1_source.png");
+    let storage_dir = crate::utils::paths::get_data_path(&format!("cards/{}", id));
+    let png_path = storage_dir.join("v1_source.png");
 
     // Determine filename
     let filename = format!(
@@ -1319,8 +1320,8 @@ pub async fn permanent_delete(
 ) -> Result<StatusCode, (StatusCode, String)> {
     // 1. 删除关联文件
     // 删除 data/cards/[id] 目录，清理所有相关图片和数据
-    let storage_dir = "data/cards";
-    let card_path = std::path::Path::new(storage_dir).join(id.to_string());
+    let storage_dir = crate::utils::paths::get_data_path("cards");
+    let card_path = storage_dir.join(id.to_string());
     if card_path.exists() {
         if let Err(e) = tokio::fs::remove_dir_all(&card_path).await {
             tracing::warn!("Failed to delete card directory: {}", e);
