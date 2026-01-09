@@ -1,6 +1,8 @@
 <script lang="ts">
     import * as Dialog from "$lib/components/ui/dialog";
     import { Button } from "$lib/components/ui/button";
+    import { Switch } from "$lib/components/ui/switch";
+    import { Label } from "$lib/components/ui/label";
     import { Upload, X, Loader2, FileJson, FileText, ArrowRight, RotateCcw, AlertCircle } from "lucide-svelte";
     import { toast } from "svelte-sonner";
     import { cn } from "$lib/utils";
@@ -10,6 +12,7 @@
 
     let dragActive = $state(false);
     let isUploading = $state(false);
+    let isWindMode = $state(false);
 
     // Single file logic
     let selectedFile: File | null = $state(null);
@@ -90,14 +93,15 @@
         selectedFile = file;
         const ext = '.' + file.name.split('.').pop()?.toLowerCase();
 
-        if (ext === '.jsonl') {
+        if (ext === '.jsonl' && !isWindMode) {
             const text = await file.text();
             rawContent = text;
             availableTags = scanTags(text);
             selectedTags = [...availableTags]; // Default select all
             step = 'preprocess';
         } else {
-            step = 'select'; // Ready to upload directly
+            // Wind Mode (jsonl) OR .txt -> direct upload
+            step = 'select'; 
         }
     }
 
@@ -135,8 +139,11 @@
                 // Add original as 'source_file'
                 formData.append('source_file', selectedFile, selectedFile.name);
             } else {
-                // Direct TXT upload
+                // Direct TXT upload OR Wind Mode JSONL
                 formData.append('file', selectedFile);
+                if (isWindMode) {
+                     formData.append('wind_mode', 'true');
+                }
             }
 
             const token = localStorage.getItem("auth_token");
@@ -165,15 +172,23 @@
 </script>
 
 <Dialog.Root bind:open={open}>
-    <Dialog.Content class="sm:max-w-[600px]">
+    <Dialog.Content class="sm:max-w-[600px] [&>button.absolute]:hidden">
         <Dialog.Header>
-            <Dialog.Title>
-                {#if step === 'preprocess'}
-                    导入预处理
-                {:else}
-                    导入聊天记录
+            <div class="flex items-center justify-between">
+                <Dialog.Title>
+                    {#if step === 'preprocess'}
+                        导入预处理
+                    {:else}
+                        导入聊天记录
+                    {/if}
+                </Dialog.Title>
+                {#if step === 'select'}
+                <div class="flex items-center gap-2">
+                    <Label for="wind-mode" class="text-xs font-normal text-muted-foreground mr-1">随风模式</Label>
+                    <Switch id="wind-mode" bind:checked={isWindMode} />
+                </div>
                 {/if}
-            </Dialog.Title>
+            </div>
             <Dialog.Description>
                 {#if step === 'preprocess'}
                     检测到标签对。请选择要保留的内容标签（未选中的将被丢弃）。

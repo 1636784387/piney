@@ -60,7 +60,7 @@
 
 </script>
 
-<div class="w-full relative min-h-[50px] TH-render">
+<div class="w-full relative min-h-[50px] TH-render" style="background:transparent;">
     <iframe
         bind:this={iframeRef}
         id={iframeId}
@@ -68,6 +68,7 @@
         src={finalSrc}
         srcdoc={finalSrcDoc}
         class="w-full border-none overflow-hidden block"
+        style="background:transparent;"
         sandbox="allow-scripts allow-popups allow-forms allow-same-origin allow-modals"
         loading="lazy"
         title="Rendered Content"

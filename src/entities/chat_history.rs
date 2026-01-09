@@ -18,6 +18,8 @@ pub struct Model {
     #[sea_orm(default_value = 1)]
     pub current_page: i32,
     pub reading_settings: Option<String>,
+    #[sea_orm(default_value = "[]")]
+    pub regex_scripts: String,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

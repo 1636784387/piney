@@ -28,6 +28,7 @@ pub struct ChatHistoryDto {
     pub updated_at: String,
     pub current_page: i32,
     pub reading_settings: Option<String>,
+    pub regex_scripts: String,
 }
 
 impl From<chat_history::Model> for ChatHistoryDto {
@@ -43,6 +44,7 @@ impl From<chat_history::Model> for ChatHistoryDto {
             progress: model.progress,
             current_page: model.current_page,
             reading_settings: model.reading_settings,
+            regex_scripts: model.regex_scripts,
             created_at: model.created_at.and_utc().to_rfc3339(),
             updated_at: model.updated_at.and_utc().to_rfc3339(),
         }
@@ -83,6 +85,7 @@ pub async fn upload_history(
 
     let mut file_data: Option<(String, Vec<u8>)> = None;
     let mut source_file_data: Option<(String, Vec<u8>)> = None;
+    let mut is_wind_mode = false;
 
     while let Some(field) = multipart
         .next_field()
@@ -105,19 +108,34 @@ pub async fn upload_history(
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             source_file_data = Some((file_name, data.to_vec()));
+        } else if name == "wind_mode" {
+            let val = field.text().await.unwrap_or("false".to_string());
+            is_wind_mode = val == "true";
         }
     }
 
     let (file_name, data) =
         file_data.ok_or((StatusCode::BAD_REQUEST, "Missing file field".to_string()))?;
 
-    // Validate main file must be .txt
-    if !file_name.ends_with(".txt") {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "Main file must be .txt".to_string(),
-        ));
-    }
+    // Wind Mode: Allow .jsonl, map as main file.
+    let format = if is_wind_mode {
+        if !file_name.ends_with(".jsonl") {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Wind Mode requires .jsonl file".to_string(),
+            ));
+        }
+        "jsonl"
+    } else {
+        // Normal Mode: Validates .txt
+        if !file_name.ends_with(".txt") {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Main file must be .txt".to_string(),
+            ));
+        }
+        "txt"
+    };
 
     let file_size = data.len() as i64;
 
@@ -144,11 +162,9 @@ pub async fn upload_history(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Handle source file if present
+    // Handle source file if present (only relevant for TXT mode usually, but maybe user uploads both in wind mode? Probably not.)
     let mut saved_source_name = None;
     if let Some((source_name, source_data)) = source_file_data {
-        // Generate unique name corresponding to main file (try to match base name if possible or just unique)
-        // Usually source file matches the main file base name
         let stem = std::path::Path::new(&save_name)
             .file_stem()
             .unwrap()
@@ -177,10 +193,11 @@ pub async fn upload_history(
         display_name: Set(save_name),
         source_file_name: Set(saved_source_name),
         file_size: Set(file_size),
-        format: Set("txt".to_string()),
+        format: Set(format.to_string()),
         progress: Set(0),
         current_page: Set(1),
         reading_settings: Set(None),
+        regex_scripts: Set("[]".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -199,6 +216,7 @@ pub struct UpdateHistoryReq {
     pub progress: Option<i32>,
     pub current_page: Option<i32>,
     pub reading_settings: Option<String>,
+    pub regex_scripts: Option<String>,
 }
 
 pub async fn update_history(
@@ -299,6 +317,9 @@ pub async fn update_history(
     }
     if let Some(settings) = payload.reading_settings {
         active.reading_settings = Set(Some(settings));
+    }
+    if let Some(scripts) = payload.regex_scripts {
+        active.regex_scripts = Set(scripts);
     }
     active.updated_at = Set(Utc::now().naive_utc());
 
@@ -418,40 +439,79 @@ pub async fn get_history_content(
 
     // Pagination Logic
     let page = query.page.unwrap().max(1);
-    let page_size = 30;
+    // Let's use 30 for txt and 2 for jsonl (as users requested).
+
+    let is_jsonl = history.format == "jsonl" || target_file_name.ends_with(".jsonl");
+    let current_page_size = if is_jsonl { 2 } else { 30 };
 
     let content = fs::read_to_string(file_path)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Split by floor markers
-    // Format: [#123] 【Name】 ... content ...
-    // Regex to split: find start index of lines beginning with `[#`
-    // Since Rust Regex split keeps results, let's use captures iter or simple split
-    // Regex: `(?m)^\[#(\d+)\]`
-    // Actually simply finding matches and slicing.
+    let mut all_floors = Vec::new();
+
+    if is_jsonl {
+        // Line-by-line parsing
+        let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+        let total_floors = lines.len();
+        let total_pages = (total_floors as f64 / current_page_size as f64).ceil() as usize;
+        let actual_page = page.min(total_pages).max(1);
+
+        if total_floors == 0 {
+            return Ok(Body::from(
+                serde_json::to_string(&PaginatedContent {
+                    total_pages: 1,
+                    current_page: 1,
+                    floors: vec![],
+                })
+                .unwrap(),
+            ));
+        }
+
+        let start_idx = (actual_page - 1) * current_page_size;
+        let end_idx = (start_idx + current_page_size).min(total_floors);
+
+        for (idx, line) in lines[start_idx..end_idx].iter().enumerate() {
+            // Parse line as JSON
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+                // Try to find name and content fields
+                // Common formats: SillyTavern uses "name", "mes" or "message"
+                let name = json
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown")
+                    .to_string();
+                let content = json
+                    .get("mes")
+                    .or_else(|| json.get("message"))
+                    .or_else(|| json.get("content"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                all_floors.push(ChatMessage {
+                    floor: (start_idx + idx + 1) as i32,
+                    name,
+                    content,
+                });
+            }
+        }
+
+        let result = PaginatedContent {
+            total_pages,
+            current_page: actual_page,
+            floors: all_floors,
+        };
+        return Ok(Body::from(serde_json::to_string(&result).unwrap()));
+    }
+
+    // Default TXT Parsing Logic
+    // ... existing logic ...
 
     // Regex: Match the header line: [#123] 【Name】
     // Then we capture everything until the next header or EOF.
     let re_header = Regex::new(r"(?m)^\[#(\d+)\]\s*【(.*?)】\s*").unwrap();
 
-    let mut all_floors = Vec::new();
-
-    // Find all matches for headers to get their positions
-    // let mut matches: Vec<(usize, i32, String)> = user_regex_matches_indices(&re_header, &content);
-
-    // for i in 0..matches.len() {
-    //     let (start, floor, name) = matches[i].clone();
-
-    //     // Content starts after the header line match
-    //     // We know the match index, but we need the length of the match to skip it.
-    //     // Actually, let's simplify. We can use split? No, we need the delimiter data.
-
-    //     // Let's re-implement with find_iter
-    //     // We iterate and get the range.
-    // }
-
-    // Simpler approach: Iterate over matches, extract content between current match and next match
     let mut headers = Vec::new();
     for mat in re_header.find_iter(&content) {
         let caps = re_header.captures(mat.as_str()).unwrap();
@@ -479,7 +539,7 @@ pub async fn get_history_content(
     }
 
     let total_floors = all_floors.len();
-    let total_pages = (total_floors as f64 / page_size as f64).ceil() as usize;
+    let total_pages = (total_floors as f64 / current_page_size as f64).ceil() as usize;
     let actual_page = page.min(total_pages).max(1);
 
     // If no floors found (e.g. empty file or format mismatch), handle gracefully
@@ -494,8 +554,8 @@ pub async fn get_history_content(
         ));
     }
 
-    let start_idx = (actual_page - 1) * page_size;
-    let end_idx = (start_idx + page_size).min(total_floors);
+    let start_idx = (actual_page - 1) * current_page_size;
+    let end_idx = (start_idx + current_page_size).min(total_floors);
 
     let page_floors = if start_idx < total_floors {
         all_floors[start_idx..end_idx].to_vec()
