@@ -23,12 +23,9 @@
     }>();
 
     // Ensure regex_scripts array exists
-    // Ensure regex_scripts array exists
     $effect(() => {
-        if (!data.extensions) data.extensions = {};
-        if (!data.extensions.regex_scripts) data.extensions.regex_scripts = [];
         // Init snapshot on mount
-        if (originalScripts === null && data.extensions.regex_scripts.length >= 0) {
+        if (originalScripts === null && data.extensions?.regex_scripts) {
              updateSnapshot();
         }
     });
@@ -225,7 +222,7 @@
             />
         </div>
         <div class="flex items-center gap-2">
-            <Button size="sm" class="h-9 gap-1 border-primary !hover:border-primary/10" onclick={addScript} variant="outline">
+            <Button size="sm" class="gap-2 border-primary bg-background text-foreground hover:bg-primary/10" onclick={addScript} variant="outline">
                 <Plus class="h-4 w-4" />
                 <span class="hidden sm:inline">添加脚本</span>
             </Button>
@@ -242,7 +239,6 @@
                         <p>未找到匹配的脚本</p>
                     {:else}
                         <p>暂无正则脚本</p>
-                        <Button variant="link" onclick={addScript} class="h-auto p-0 text-primary">立即创建</Button>
                     {/if}
 </div>
             {:else}

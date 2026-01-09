@@ -5,6 +5,7 @@
 pub mod ai;
 pub mod cards;
 pub mod categories;
+pub mod history;
 pub mod settings;
 pub mod upload;
 pub mod world_info;
@@ -36,6 +37,19 @@ pub fn routes(db: DatabaseConnection) -> Router {
         .route("/cards/{id}/export", get(cards::export_card))
         .route("/cards/batch/category", put(cards::batch_update_category))
         .route("/cards/batch/delete", post(cards::batch_soft_delete))
+        // 聊天记录
+        .route(
+            "/cards/{id}/history",
+            get(history::list_history).post(history::upload_history),
+        )
+        .route(
+            "/cards/{id}/history/{history_id}",
+            patch(history::update_history).delete(history::delete_history),
+        )
+        .route(
+            "/cards/{id}/history/{history_id}/content",
+            get(history::get_history_content).put(history::update_history_content),
+        )
         // 回收站
         .route("/trash/cards", get(cards::list_trash))
         .route("/trash/cards/{id}/restore", post(cards::restore_card))

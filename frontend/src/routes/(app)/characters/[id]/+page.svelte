@@ -46,12 +46,13 @@
     import WorldInfoTab from "$lib/components/character/world_info/WorldInfoTab.svelte";
     import ImageCropperDialog from "$lib/components/ui/ImageCropperDialog.svelte";
     import RegexTab from "$lib/components/character/regex/RegexTab.svelte";
+    import ChatHistoryTab from "$lib/components/character/history/ChatHistoryTab.svelte";
 
     const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:9696";
     let cardId = $page.params.id;
     let card: any = null;
     let loading = true;
-    let activeTab = "overview";
+    let activeTab = $page.url.searchParams.get("tab") || "overview";
 
     // Data for Overview
     let editingNote = "";
@@ -104,7 +105,10 @@
         // Update World Info snapshot
         originalWorldInfoState = JSON.stringify({
             entries: card?.data?.data?.character_book?.entries || [],
-            extensions: card?.data?.data?.extensions || {},
+            extensions: {
+                ...card?.data?.data?.extensions,
+                regex_scripts: card?.data?.data?.extensions?.regex_scripts || []
+            }
         });
         lastSaved = Date.now();
     }
@@ -130,10 +134,29 @@
         isMesExampleDirty = formMesExample !== originalFormState.mesExample;
         isPersonalityDirty = formPersonality !== originalFormState.personality;
 
+        // Normalize for comparison only (do not mutate source)
         const currentWorldInfoState = JSON.stringify({
             entries: card?.data?.data?.character_book?.entries || [],
-            extensions: card?.data?.data?.extensions || {},
+            extensions: {
+                ...card?.data?.data?.extensions,
+                regex_scripts: card?.data?.data?.extensions?.regex_scripts || []
+            }
         });
+        
+        // Also normalize original snapshot during comparison
+        // (Wait, originalWorldInfoState is a string needed for robust comp)
+        // We need to parse original, normalize, and compare, OR construct original with normalization.
+        
+        // Actually, better to just normalize the structures before stringifying.
+        // Let's rely on the snapshot being "correct" at load time, 
+        // but if load time had undefined regex_scripts, snapshot has undefined.
+        // If current state (due to some other component) has [], then we have mismatch.
+        
+        // The issue is that RegexTab MIGHT still be setting it if we add a script?
+        // But if we just view page, we shouldn't set it.
+        // If RegexTab is rendered, we removed the forced init.
+        // So `card.data.data.extensions.regex_scripts` should remain undefined if it was undefined.
+        
         isWorldInfoDirty = currentWorldInfoState !== originalWorldInfoState;
 
         isDirty =
@@ -481,28 +504,30 @@
     }
 
     async function exportCard() {
-        // Trigger download - For download links, we might need a temporary token or use fetch+blob
-        // If API requires Auth header, window.open won't work well directly unless using query param token?
-        // Or we assume export endpoint is protected?
-        // If protected, window.open fails.
-        // Let's use fetch and create object URL.
         try {
             const token = localStorage.getItem("auth_token");
             const res = await fetch(`${API_BASE}/api/cards/${cardId}/export`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (!res.ok) throw new Error("导出失败");
+            
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `${card.name || "character"}.png`; // Try to guess name, backend should send Content-Disposition
+            
+            // Determine extension based on content-type
+            const contentType = res.headers.get("content-type") || "";
+            const ext = contentType.includes("application/json") ? "json" : "png";
+            
+            a.download = `${card.name || "character"}.${ext}`; 
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } catch (e) {
             toast.error("导出失败");
+            console.error(e);
         }
     }
 
@@ -1251,6 +1276,23 @@
                             数据加载未完成或格式错误
                         </div>
                     {/if}
+                </div>
+            </div>
+            <!-- Chat History Tab -->
+            <div class={activeTab === "chat" ? "" : "hidden"}>
+                 <div class="space-y-6 max-w-4xl mx-auto pb-10">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="space-y-1">
+                            <h2 class="text-lg font-semibold">
+                                聊天记录
+                            </h2>
+                            <p class="text-xs text-muted-foreground">
+                                管理与此角色相关的聊天记录文件
+                            </p>
+                        </div>
+                    </div>
+
+                    <ChatHistoryTab {cardId} />
                 </div>
             </div>
         {/if}

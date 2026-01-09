@@ -37,8 +37,17 @@ const third_party = `
 <link rel="stylesheet" href="https://testingcf.jsdelivr.net/npm/jquery-ui/themes/base/theme.min.css" />
 <script src="https://testingcf.jsdelivr.net/npm/jquery-ui-touch-punch"></script>
 <script src="https://testingcf.jsdelivr.net/npm/pixi.js/dist/pixi.min.js"></script>
-<script src="https://testingcf.jsdelivr.net/npm/tailwindcss@3.4.1/lib/index.min.js"></script> <!-- Attempting to use a CDN version, might need specific build -->
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+    // Suppress Tailwind CDN production warning
+    try {
+        const originalWarn = console.warn;
+        console.warn = (...args) => {
+            if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+            originalWarn.apply(console, args);
+        };
+    } catch(e) {}
+</script>
 `;
 
 const predefine_script = `
@@ -103,6 +112,31 @@ const adjust_viewport_script = `
 // Initialize viewport height
 document.documentElement.style.setProperty('--TH-viewport-height', (window.parent.innerHeight) + 'px');
 
+// Sync Dark Mode from parent
+function syncTheme() {
+    try {
+        const isDark = window.parent.document.documentElement.classList.contains('dark');
+        if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.body.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+            document.body.classList.remove('dark');
+        }
+    } catch(e) {
+        // Fallback to system preference if parent access fails
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+    }
+}
+syncTheme();
+// Listen for changes on parent class attribute (optional, usually static per session, but good to have)
+try {
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(window.parent.document.documentElement, { attributes: true, attributeFilter: ['class'] });
+} catch(e) {}
+
 window.addEventListener('message', function (event) {
     if (event.data?.type === 'TH_UPDATE_VIEWPORT_HEIGHT') {
         document.documentElement.style.setProperty('--TH-viewport-height', (window.parent.innerHeight) + 'px');
@@ -122,15 +156,32 @@ ${useBlobUrl ? `<base href="${window.location.origin}"/>` : ''}
 <style>
 /* Reset and base styles */
 *,*::before,*::after{box-sizing:border-box;}
-html,body {
+html {
+    background-color: transparent !important;
+}
+body {
     margin:0 !important;
     padding:0;
     overflow:hidden !important;
-    max-width: 100% !important; /* From docs/render.md */
-    white-space: pre-wrap; /* Preserve text formatting/newlines */
-    /* Removed min-height: 100% to allow proper auto-shrinking */
+    max-width: 100% !important;
+    white-space: pre-wrap;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #0f172a; /* Slate 900 for Light Mode */
+    background-color: transparent !important;
 }
-/* Default avatars - simplified for now */
+/* Dark Mode Overrides */
+html.dark body {
+    color: #e2e8f0; /* Slate 200 for Dark Mode */
+}
+/* Allow user to override */
+@media (prefers-color-scheme: dark) {
+    /* Only apply if no parent class sync happened (fallback) */
+    body:not(.dark) { color: #e2e8f0; }
+}
+
+/* Default avatars */
 .user_avatar,.user-avatar{background-color: #ccc;}
 .char_avatar,.char-avatar{background-color: #888;}
 </style>

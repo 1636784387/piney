@@ -1160,7 +1160,27 @@ pub async fn export_card(
         return Ok((headers, body));
     }
 
-    Err((StatusCode::NOT_FOUND, "Source file not found".to_string()))
+    // Fallback: Export as JSON if no PNG source/thumbnail available
+    let safe_name = card
+        .name
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-')
+        .collect::<String>();
+
+    let json_filename = format!("{}.json", safe_name);
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        format!("attachment; filename=\"{}\"", json_filename)
+            .parse()
+            .unwrap(),
+    );
+
+    // Use current DB data
+    let body = Body::from(card.data);
+
+    Ok((headers, body))
 }
 
 #[derive(Deserialize)]

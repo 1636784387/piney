@@ -60,7 +60,7 @@
 
 </script>
 
-<div class="w-full relative min-h-[50px]">
+<div class="w-full relative min-h-[50px] TH-render">
     <iframe
         bind:this={iframeRef}
         id={iframeId}
