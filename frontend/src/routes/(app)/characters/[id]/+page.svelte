@@ -2,6 +2,7 @@
     import { page } from "$app/stores";
     import { beforeNavigate, goto } from "$app/navigation";
     import { onMount } from "svelte";
+    import { AiService } from "$lib/ai/service";
     import * as Card from "$lib/components/ui/card";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
@@ -209,48 +210,70 @@
 
     // AI Overview Generation
     let isGeneratingOverview = false;
-    let generationLogs: string[] = [];
-    let isLogsOpen = false;
-
     async function generateOverview() {
         if (isGeneratingOverview) return;
         isGeneratingOverview = true;
-        generationLogs = []; // Clear previous logs
         toast.info("正在通过 AI 分析角色卡...", { duration: 2000 });
 
         try {
+            // Use New AI Service Layer
+            // The prompt is now built on the client side
+            const result = await AiService.generateOverview(card);
+
+            // Success handling
+            card.custom_summary = result.summary;
+            editingSummary = result.summary;
+
+            let successMsg = "概览已更新";
+
+            if (result.tags && Array.isArray(result.tags)) {
+                tags = result.tags;
+                card.tags = JSON.stringify(tags);
+                successMsg = "概览与标签生成成功";
+                
+                // We need to update the `viewData` (parsed JSON) if it exists
+                // The DB "data" field is a strings, but `card.data` in the app is an object (parsed in loadCard)
+                try {
+                    let currentData = typeof card.data === 'string' ? JSON.parse(card.data) : (card.data || {});
+                    
+                    // Update tags in data JSON (support V1 root tags & V2 data.tags)
+                    // Root
+                    currentData.tags = tags;
+                    // V2
+                    if (currentData.data) {
+                         currentData.data.tags = tags;
+                    }
+                    
+                    // CRITICAL: Assign back as OBJECT to prevent breaking reactive dirty checks (which expect object access)
+                    card.data = currentData;
+                } catch (jsonErr) {
+                    console.error("Failed to sync tags to data JSON", jsonErr);
+                }
+            }
+
+            // Trigger Save to persist changes to DB
             const token = localStorage.getItem("auth_token");
-            const res = await fetch(`${API_BASE}/api/ai/card/overview`, {
-                method: "POST",
+            const updatePayload: any = { custom_summary: result.summary };
+            if (result.tags && Array.isArray(result.tags)) {
+                updatePayload.tags = result.tags;
+            }
+
+            const res = await fetch(`${API_BASE}/api/cards/${cardId}`, {
+                method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({ card_id: cardId }),
+                body: JSON.stringify(updatePayload),
             });
 
-            const data = await res.json();
-            if (data.logs) generationLogs = data.logs;
+            if (!res.ok) throw new Error("保存概览失败");
+            
+            toast.success(successMsg);
+            
+            // Sync snapshot so it doesn't show as dirty
+            updateFormSnapshot();
 
-            if (!res.ok) {
-                if (data.logs && data.logs.length > 0) {
-                    // If we have logs, user can inspect them
-                    console.warn("Generation failed with logs", data.logs);
-                }
-                throw new Error(data.error || "生成请求失败");
-            }
-
-            // Success
-            card.custom_summary = data.summary;
-            editingSummary = data.summary;
-
-            if (data.tags) {
-                tags = data.tags;
-                card.tags = JSON.stringify(tags);
-                toast.success("概览与标签生成成功");
-            } else {
-                toast.success("概览已更新");
-            }
         } catch (e) {
             console.error(e);
             toast.error("生成失败", { description: String(e) });
@@ -282,6 +305,18 @@
             tags = newTags;
             // Also update local card object
             card.tags = JSON.stringify(newTags);
+
+            // Sync tags to card.data (Object) as well to prevent consistency issues
+            try {
+                let currentData = typeof card.data === 'string' ? JSON.parse(card.data) : (card.data || {});
+                currentData.tags = newTags;
+                if (currentData.data) {
+                     currentData.data.tags = newTags;
+                }
+                card.data = currentData;
+            } catch (ignore) {}
+
+            updateFormSnapshot();
             toast.success("标签已更新");
         } catch (e) {
             console.error(e);
@@ -865,20 +900,6 @@
                                         <div
                                             class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                         >
-                                            {#if generationLogs.length > 0}
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    class="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                                    title="查看生成日志"
-                                                    onclick={() =>
-                                                        (isLogsOpen = true)}
-                                                >
-                                                    <ScrollText
-                                                        class="h-3.5 w-3.5"
-                                                    />
-                                                </Button>
-                                            {/if}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -1301,55 +1322,6 @@
 
 <svelte:window onbeforeunload={handleBeforeUnload} />
 
-<Dialog.Root bind:open={isLogsOpen}>
-    <Dialog.Content class="max-w-2xl max-h-[80vh] flex flex-col">
-        <Dialog.Header>
-            <Dialog.Title>AI 生成日志</Dialog.Title>
-            <Dialog.Description>
-                查看 AI 概览生成的详细过程和原始响应。
-            </Dialog.Description>
-        </Dialog.Header>
-        <ScrollArea
-            class="flex-1 min-h-[300px] border rounded-md bg-muted/50 p-4"
-        >
-            <div class="space-y-2 font-mono text-xs">
-                {#each generationLogs as log}
-                    <div
-                        class="border-b border-border/50 pb-2 last:border-0 last:pb-0"
-                    >
-                        {#if log.startsWith("Raw JSON Response:") || log.startsWith("Raw Content:")}
-                            <details class="cursor-pointer">
-                                <summary
-                                    class="text-muted-foreground hover:text-foreground transition-colors"
-                                >
-                                    {log.split(":")[0]}: (点击展开)
-                                </summary>
-                                <pre
-                                    class="mt-2 p-2 bg-background rounded border text-[10px] overflow-x-auto max-h-[200px] overflow-y-auto whitespace-pre-wrap break-all">{log.substring(
-                                        log.indexOf(":") + 2,
-                                    )}</pre>
-                            </details>
-                        {:else}
-                            <span class="whitespace-pre-wrap break-all"
-                                >{log}</span
-                            >
-                        {/if}
-                    </div>
-                {/each}
-                {#if generationLogs.length === 0}
-                    <div class="text-muted-foreground text-center py-8">
-                        无日志记录
-                    </div>
-                {/if}
-            </div>
-        </ScrollArea>
-        <Dialog.Footer>
-            <Button variant="outline" onclick={() => (isLogsOpen = false)}
-                >关闭</Button
-            >
-        </Dialog.Footer>
-    </Dialog.Content>
-</Dialog.Root>
 
 <Dialog.Root bind:open={showUnsavedDialog}>
     <Dialog.Content class="sm:max-w-[425px]">

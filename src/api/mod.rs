@@ -84,5 +84,6 @@ pub fn routes(db: DatabaseConnection) -> Router {
         .route("/ai/test", post(ai::test_connection))
         .route("/ai/models", get(ai::list_models_proxy))
         .route("/ai/card/overview", post(ai::generate_overview))
+        .route("/ai/execute", post(ai::execute_feature))
         .with_state(db)
 }

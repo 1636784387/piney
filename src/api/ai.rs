@@ -806,3 +806,106 @@ Creator Comment: {}
         logs,
     }))
 }
+
+#[derive(Deserialize)]
+pub struct ExecuteFeatureRequest {
+    pub feature_id: String,               // e.g. "overview"
+    pub messages: Vec<serde_json::Value>, // [{"role": "user", "content": "..."}]
+}
+
+/// POST /api/ai/execute - Execute generic AI task based on feature config
+pub async fn execute_feature(
+    State(db): State<DatabaseConnection>,
+    Json(payload): Json<ExecuteFeatureRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
+    // 1. Resolve Config Key
+    let config_key = format!("ai_config_{}", payload.feature_id);
+
+    // 2. Get Channel Config
+    let config_setting = setting::Entity::find_by_id(&config_key)
+        .one(&db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?;
+
+    let channel_id_str = match config_setting {
+        Some(s) => s.value,
+        None => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(
+                    serde_json::json!({"error": format!("Feature '{}' not configured ({} missing)", payload.feature_id, config_key)}),
+                ),
+            ));
+        }
+    };
+
+    let channel_id = Uuid::parse_str(&channel_id_str).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Invalid Channel ID in configuration"})),
+        )
+    })?;
+
+    let channel = ai_channel::Entity::find_by_id(channel_id)
+        .one(&db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "Configured AI Channel not found"})),
+            )
+        })?;
+
+    // 3. Proxy Request
+    let client = reqwest::Client::new();
+    let base = channel.base_url.trim_end_matches('/');
+    let url = format!("{}/chat/completions", base);
+
+    let body = serde_json::json!({
+        "model": channel.model_id,
+        "messages": payload.messages,
+        "temperature": 0.7
+    });
+
+    let res = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", channel.api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": format!("Request failed: {}", e)})),
+            )
+        })?;
+
+    if !res.status().is_success() {
+        let err_text = res.text().await.unwrap_or_default();
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": format!("Provider API Error: {}", err_text)})),
+        ));
+    }
+
+    let json: Value = res.json().await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": format!("Invalid JSON response: {}", e)})),
+        )
+    })?;
+
+    Ok(Json(json))
+}
