@@ -738,7 +738,7 @@
     {:else if viewMode === "gallery"}
         <!-- 画廊视图 -->
         <div
-            class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+            class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5"
         >
             {#each filteredCards as card (card.id)}
                 <ContextMenu.Root>
@@ -746,7 +746,7 @@
                         <div
                             role="button"
                             tabindex="0"
-                            class="group relative rounded-2xl overflow-hidden bg-card shadow-md hover:shadow-xl transition-all duration-200 hover:-translate-y-1 cursor-pointer"
+                            class="group relative rounded-xl overflow-hidden bg-card shadow-md hover:shadow-xl transition-all duration-200 hover:-translate-y-1 cursor-pointer"
                             class:ring-2={isSelectionMode &&
                                 selectedCardIds.has(card.id)}
                             class:ring-primary={isSelectionMode &&
@@ -794,7 +794,7 @@
                                     <div
                                         class="absolute top-3 left-3 bg-black/60 text-white px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-sm"
                                     >
-                                        v{card.version}
+                                        {card.version}
                                     </div>
                                 {/if}
 
@@ -816,7 +816,7 @@
                                     </div>
                                 {:else}
                                     <button
-                                        class="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm hover:bg-black/80"
+                                        class="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity backdrop-blur-sm hover:bg-black/80"
                                         onclick={(e) => {
                                             e.stopPropagation();
                                             toggleCoverBlur(card);
@@ -1023,7 +1023,7 @@
                                     {#if card.version && card.version !== "1.0"}
                                         <span
                                             class="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono"
-                                            >v{card.version}</span
+                                            >{card.version}</span
                                         >
                                     {/if}
                                     {#if card.tags && card.tags.length > 0}

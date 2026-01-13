@@ -15,6 +15,8 @@ mod m20260108_000001_create_chat_histories;
 mod m20260108_000002_add_source_file_to_history;
 mod m20260109_000001_add_history_pagination_settings;
 mod m20260109_000002_add_regex_scripts_to_history;
+mod m20260113_000001_create_character_versions;
+mod m20260113_000002_add_data_hash;
 
 pub struct Migrator;
 
@@ -34,6 +36,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260108_000002_add_source_file_to_history::Migration),
             Box::new(m20260109_000001_add_history_pagination_settings::Migration),
             Box::new(m20260109_000002_add_regex_scripts_to_history::Migration),
+            Box::new(m20260113_000001_create_character_versions::Migration),
+            Box::new(m20260113_000002_add_data_hash::Migration),
         ]
     }
 }

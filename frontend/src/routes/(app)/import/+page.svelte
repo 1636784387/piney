@@ -8,6 +8,7 @@
         Loader2,
         CheckCircle2,
         XCircle,
+        AlertTriangle,
     } from "@lucide/svelte";
     import { Button } from "$lib/components/ui/button";
     import {
@@ -17,12 +18,18 @@
         TabsTrigger,
     } from "$lib/components/ui/tabs";
     import * as Card from "$lib/components/ui/card";
+    import * as AlertDialog from "$lib/components/ui/alert-dialog";
+    import { Badge } from "$lib/components/ui/badge";
     import { toast } from "svelte-sonner";
     import { cn } from "$lib/utils";
     import { API_BASE } from "$lib/api";
+    import { Progress } from "$lib/components/ui/progress";
 
     let dragging = false;
     let uploading = false;
+    let progress = 0;
+    let currentFileIndex = 0;
+    let totalFilesCount = 0;
     let extension_hint = ".png, .json";
 
     // Mode: 'card' | 'worldbook'
@@ -80,8 +87,11 @@
         failCount = 0;
 
         try {
-            const formData = new FormData();
-            let hasValidFiles = false;
+            // Calculate total files for progress bar
+            // Calculate total files for progress bar
+            totalFilesCount = files.length;
+            currentFileIndex = 0;
+            progress = 0;
 
             // Validate files first
             const filePromises = Array.from(files).map((file) => {
@@ -150,30 +160,6 @@
 
             const validatedFiles = await Promise.all(filePromises);
 
-            for (const item of validatedFiles) {
-                if (item.valid) {
-                    formData.append("files", item.file);
-                    hasValidFiles = true;
-                } else {
-                    // Add to results as error immediately
-                    importResults = [
-                        ...importResults,
-                        {
-                            file_name: item.file.name,
-                            status: "error",
-                            reason: item.reason,
-                        },
-                    ];
-                    failCount++;
-                }
-            }
-
-            if (!hasValidFiles) {
-                if (failCount === 0) toast.error("未选择有效文件");
-                else toast.warning(`跳过 ${failCount} 个无效文件`);
-                return;
-            }
-
             const endpoint =
                 importType === "card"
                     ? `${API_BASE}/api/cards/import`
@@ -185,30 +171,78 @@
                 headers["Authorization"] = `Bearer ${token}`;
             }
 
-            const res = await fetch(endpoint, {
-                method: "POST",
-                headers,
-                body: formData,
-            });
-
-            if (res.ok) {
-                const json: ImportResult[] = await res.json();
-                importResults = json;
-                successCount = json.filter(
-                    (r) => r.status === "success",
-                ).length;
-                failCount = json.filter((r) => r.status === "error").length;
-
-                if (failCount === 0) {
-                    toast.success(`成功导入 ${successCount} 个文件`);
-                } else {
-                    toast.warning(
-                        `导入完成：${successCount} 成功，${failCount} 失败`,
-                    );
+            for (let i = 0; i < validatedFiles.length; i++) {
+                const item = validatedFiles[i];
+                currentFileIndex = i + 1;
+                if (!item.valid) {
+                    importResults = [
+                        ...importResults,
+                        {
+                            file_name: item.file.name,
+                            status: "error",
+                            reason: item.reason,
+                        },
+                    ];
+                    failCount++;
+                    // Update progress even for skipped files
+                    // Update progress even for skipped files
+                    progress = Math.round(((i + 1) / totalFilesCount) * 100);
+                    continue;
                 }
+
+                // Upload single file
+                const formData = new FormData();
+                formData.append("files", item.file); // Backend expects "files"
+
+                try {
+                    const res = await fetch(endpoint, {
+                        method: "POST",
+                        headers,
+                        body: formData,
+                    });
+
+                    if (res.ok) {
+                        const json: ImportResult[] = await res.json();
+                        // Append results (usually just one)
+                        importResults = [...importResults, ...json];
+                        
+                        json.forEach(r => {
+                            if (r.status === "success") successCount++;
+                            else failCount++;
+                        });
+                    } else {
+                        const text = await res.text();
+                        importResults = [
+                            ...importResults,
+                            {
+                                file_name: item.file.name,
+                                status: "error",
+                                reason: text,
+                            },
+                        ];
+                        failCount++;
+                    }
+                } catch (err) {
+                    console.error(err);
+                    importResults = [
+                        ...importResults,
+                        {
+                            file_name: item.file.name,
+                            status: "error",
+                            reason: "网络错误",
+                        },
+                    ];
+                    failCount++;
+                }
+
+                // Update progress after each file
+                progress = Math.round(((i + 1) / totalFilesCount) * 100);
+            }
+
+            if (failCount === 0) {
+                toast.success(`成功导入 ${successCount} 个文件`);
             } else {
-                const text = await res.text();
-                toast.error(`服务器错误: ${text}`);
+                toast.warning(`导入完成：${successCount} 成功，${failCount} 失败`);
             }
         } catch (error) {
             console.error(error);
@@ -217,6 +251,8 @@
             uploading = false;
         }
     }
+
+
 
     $: extension_hint = importType === "card" ? ".png, .json" : ".json";
 </script>
@@ -277,6 +313,12 @@
                 <div class="space-y-2">
                     <h3 class="text-lg font-semibold">拖拽文件到这里</h3>
                     <p class="text-sm text-muted-foreground">或点击选择文件</p>
+                    {#if uploading}
+                        <div class="w-64 mt-4 mx-auto">
+                            <Progress value={progress} class="h-2" />
+                            <p class="text-xs text-muted-foreground mt-2">正在处理... {currentFileIndex} / {totalFilesCount}</p>
+                        </div>
+                    {/if}
                 </div>
 
                 <div
@@ -351,3 +393,6 @@
         </p>
     </Tabs>
 </div>
+
+<!-- 第一步：警告对话框 -->
+

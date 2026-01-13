@@ -8,6 +8,7 @@ pub mod categories;
 pub mod history;
 pub mod settings;
 pub mod upload;
+pub mod versions;
 pub mod world_info;
 
 use axum::{
@@ -37,6 +38,19 @@ pub fn routes(db: DatabaseConnection) -> Router {
         .route("/cards/{id}/export", get(cards::export_card))
         .route("/cards/batch/category", put(cards::batch_update_category))
         .route("/cards/batch/delete", post(cards::batch_soft_delete))
+        // 角色卡版本管理
+        .route(
+            "/cards/{id}/versions",
+            get(versions::list_versions).post(versions::create_version),
+        )
+        .route(
+            "/cards/{id}/versions/{version_id}/restore",
+            post(versions::restore_version),
+        )
+        .route(
+            "/cards/{id}/versions/{version_id}",
+            delete(versions::delete_version),
+        )
         // 聊天记录
         .route(
             "/cards/{id}/history",

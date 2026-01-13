@@ -31,6 +31,8 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub user_note: Option<String>,
     pub metadata_modified: bool,
+    #[sea_orm(column_type = "Text")]
+    pub data_hash: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

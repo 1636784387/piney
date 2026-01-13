@@ -17,6 +17,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::entities::character_card;
+use crate::utils::hash::compute_json_hash;
 
 #[derive(Serialize, Deserialize)]
 pub struct ImportResult {
@@ -68,105 +69,40 @@ async fn process_import(
         let is_png = content_type == "image/png" || file_name.to_lowercase().ends_with(".png");
         let is_json =
             content_type == "application/json" || file_name.to_lowercase().ends_with(".json");
+
         if is_png {
             // 处理 PNG 角色卡
-            match process_png_card(&data, storage_dir.clone()).await {
-                Ok((uuid, json_str)) => {
-                    // 头像路径指向版本化文件夹中的缩略图 (v1)
-                    let avatar_path = format!("/cards/{}/v1_thumbnail.webp", uuid);
-
-                    match save_card_to_db(&db, uuid, json_str, Some(avatar_path)).await {
-                        Ok(_) => {
-                            results.push(ImportResult {
-                                file_name,
-                                status: "success".to_string(),
-                                reason: None,
-                            });
-                        }
-                        Err(e) => {
-                            results.push(ImportResult {
-                                file_name,
-                                status: "error".to_string(),
-                                reason: Some(format!("数据库保存失败: {}", e)),
-                            });
-                        }
-                    }
+            match process_png_card(&db, &data, storage_dir.clone()).await {
+                Ok(_) => {
+                    results.push(ImportResult {
+                        file_name,
+                        status: "success".to_string(),
+                        reason: None,
+                    });
                 }
-                Err(e) => {
+                Err(err_msg) => {
                     results.push(ImportResult {
                         file_name,
                         status: "error".to_string(),
-                        reason: Some(e),
+                        reason: Some(err_msg),
                     });
                 }
             }
         } else if is_json {
             // 处理 JSON 角色卡
-            let json_result = (|| {
-                let json_string =
-                    String::from_utf8(data.to_vec()).map_err(|_| "JSON 编码无效".to_string())?;
-                // 验证 JSON
-                let v: Value = serde_json::from_str(&json_string)
-                    .map_err(|e| format!("无效的 JSON: {}", e))?;
-
-                // 检查是否为世界书 (World Info)
-                // 世界书特征: 根节点包含 "entries"，且不包含角色卡特有的 "data" (V2) 或 "name" (V1)
-                if v.get("entries").is_some() && v.get("data").is_none() && v.get("name").is_none()
-                {
-                    return Err("检测到世界书文件，请在世界书页面进行导入".to_string());
+            match process_json_card(&db, &data, storage_dir.clone()).await {
+                Ok(_) => {
+                    results.push(ImportResult {
+                        file_name,
+                        status: "success".to_string(),
+                        reason: None,
+                    });
                 }
-
-                // 检查是否为有效的角色卡
-                // 必须包含 "data" (V2/V3) 或 "name" (V1)
-                if v.get("data").is_none() && v.get("name").is_none() {
-                    return Err("无效的角色卡格式：缺少必要的 'data' 或 'name' 字段".to_string());
-                }
-
-                Ok(json_string)
-            })();
-
-            match json_result {
-                Ok(json_str) => {
-                    // JSON 导入通常没有头像，生成随机 UUID
-                    let uuid = Uuid::new_v4();
-
-                    // 为 JSON 卡片也创建专属目录，方便后续添加封面
-                    let card_path = storage_dir.join(uuid.to_string());
-                    if !card_path.exists() {
-                        if let Err(e) = fs::create_dir_all(&card_path).await {
-                            results.push(ImportResult {
-                                file_name: file_name.clone(),
-                                status: "error".to_string(),
-                                reason: Some(format!("创建目录失败: {}", e)),
-                            });
-                            continue;
-                        }
-                    }
-
-                    match save_card_to_db(&db, uuid, json_str, Some("/default.webp".to_string()))
-                        .await
-                    {
-                        Ok(_) => {
-                            results.push(ImportResult {
-                                file_name,
-                                status: "success".to_string(),
-                                reason: None,
-                            });
-                        }
-                        Err(e) => {
-                            results.push(ImportResult {
-                                file_name,
-                                status: "error".to_string(),
-                                reason: Some(format!("数据库保存失败: {}", e)),
-                            });
-                        }
-                    }
-                }
-                Err(e) => {
+                Err(err_msg) => {
                     results.push(ImportResult {
                         file_name,
                         status: "error".to_string(),
-                        reason: Some(e),
+                        reason: Some(err_msg),
                     });
                 }
             }
@@ -181,99 +117,35 @@ async fn process_import(
 
     Ok(Json(results))
 }
-
 async fn process_png_card(
+    db: &DatabaseConnection,
     data: &[u8],
     storage_dir: std::path::PathBuf,
-) -> Result<(Uuid, String), String> {
-    // 1. 手动解析 PNG Chunks (参考 user 提供的可靠逻辑)
-    // 这种方法不依赖外部库对 chunk 顺序的严格校验，更健壮
-    let mut extracted_json: Option<String> = None;
+) -> Result<(), String> {
+    // 1. 手动解析 PNG Chunks 并提取 JSON
+    let extracted_json = extract_png_metadata(data)?;
 
-    // PNG 签名校验
-    const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
-    if data.len() < 8 || &data[..8] != PNG_SIGNATURE {
-        return Err("非法的 PNG 文件签名".to_string());
+    // 验证这一 JSON 格式是否合法
+    let json_val: Value =
+        serde_json::from_str(&extracted_json).map_err(|e| format!("元数据 JSON 无效: {}", e))?;
+
+    // 2. 检查重复 (Pre-check)
+    // 计算哈希（使用紧凑格式以保证一致性）
+    let compact_json =
+        serde_json::to_string(&json_val).map_err(|e| format!("序列化 JSON 失败: {}", e))?;
+    let data_hash = compute_json_hash(&compact_json);
+
+    let existing = character_card::Entity::find()
+        .filter(character_card::Column::DataHash.eq(&data_hash))
+        .one(db)
+        .await
+        .map_err(|e| format!("数据库查询失败: {}", e))?;
+
+    if let Some(existing_card) = existing {
+        return Err(format!("角色卡已存在: {}", existing_card.name));
     }
 
-    let mut offset = 8;
-    while offset + 8 <= data.len() {
-        // 读取 Chunk 长度 (Big Endian)
-        let length_bytes: [u8; 4] = data[offset..offset + 4].try_into().unwrap();
-        let length = u32::from_be_bytes(length_bytes) as usize;
-
-        // 读取 Chunk 类型
-        let chunk_type = &data[offset + 4..offset + 8];
-
-        // 数据区域范围
-        let data_start = offset + 8;
-        let data_end = data_start + length;
-
-        // 确保不越界
-        if data_end > data.len() {
-            warn!("PNG Chunk 越界，停止解析");
-            break;
-        }
-
-        // 处理 tEXt 区块
-        if chunk_type == b"tEXt" {
-            let chunk_data = &data[data_start..data_end];
-            // tEXt 格式: Keyword + \0 + Text
-            // 查找 null separator
-            if let Some(null_pos) = chunk_data.iter().position(|&b| b == 0) {
-                let keyword_bytes = &chunk_data[..null_pos];
-                let text_bytes = &chunk_data[null_pos + 1..]; // 跳过 \0
-
-                if let Ok(keyword) = String::from_utf8(keyword_bytes.to_vec()) {
-                    // 检查 keyword
-                    if keyword == "ccv3" || keyword == "chara" {
-                        // 尝试 Base64 解码
-                        if let Ok(decoded) = general_purpose::STANDARD.decode(text_bytes) {
-                            if let Ok(s) = String::from_utf8(decoded) {
-                                extracted_json = Some(s);
-                                // 优先使用 ccv3，如果找到直接退出
-                                if keyword == "ccv3" {
-                                    break;
-                                }
-                            }
-                        } else {
-                            // Base64 失败，尝试直接解析 (Fallback 逻辑)
-                            if let Ok(s) = String::from_utf8(text_bytes.to_vec()) {
-                                warn!("{} Base64 解码失败，回退为直接文本", keyword);
-                                extracted_json = Some(s);
-                                if keyword == "ccv3" {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 遇到 IEND 也可以继续，以防 tEXt 在 IEND 之后 (虽然不标准但为了兼容)
-        // 但通常 IEND 就是结束。参考文档逻辑是“遍历 Chunk”。
-        // 如果我们要在 IEND 后继续，只需不 break 即可。
-        // 为了安全起见，我们继续遍历直到文件末尾。
-
-        // 移动到下一个 Chunk (包含 4字节 CRC)
-        offset = data_end + 4;
-    }
-
-    if extracted_json.is_none() {
-        warn!("手动遍历 Chunk 未找到 ccv3 或 chara 元数据");
-        // 保留之前的暴力扫描作为最后的防线?
-        // 既然已经完整遍历了结构，如果没有，那可能真没有，或者结构极其损坏。
-        // 参考文档没有提暴力扫描，只提了 Chunk 遍历。
-        // 此处不再回退，直接报错，避免误判。
-    }
-
-    let json_str = extracted_json.ok_or("无效的角色卡图片：未找到元数据 (ccv3/chara)")?;
-    // 验证一下 JSON 格式是否合法，但不改变内容
-    let _: Value =
-        serde_json::from_str(&json_str).map_err(|e| format!("元数据 JSON 无效: {}", e))?;
-
-    // 2. 生成 UUID 并创建专属文件夹
+    // 3. 确定无重复后，保存文件
     let uuid = Uuid::new_v4();
     let card_dir = storage_dir.join(uuid.to_string());
 
@@ -283,40 +155,124 @@ async fn process_png_card(
             .map_err(|e| format!("创建角色卡目录失败: {}", e))?;
     }
 
-    // 3. 保存原始 PNG (v1_source.png)
+    // 保存原始 PNG
     let png_name = "v1_source.png";
     let png_path = card_dir.join(png_name);
     fs::write(&png_path, data)
         .await
         .map_err(|e| format!("保存原始 PNG 失败: {}", e))?;
 
-    // 4. 生成 WebP 缩略图 (v1_thumbnail.webp)
+    // 生成 WebP 缩略图
     let img = image::load_from_memory(data).map_err(|e| format!("图片加载失败: {}", e))?;
-
-    // 保持原始尺寸和比例 (512x768)，不进行强制缩放
-    // 仅转为 WebP 格式以优化体积 (75% 质量)
     let encoder = webp::Encoder::from_image(&img).map_err(|e| format!("WebP 编码失败: {}", e))?;
     let webp_data = encoder.encode(75.0).to_vec();
-
     let webp_name = "v1_thumbnail.webp";
     let webp_path = card_dir.join(webp_name);
     fs::write(&webp_path, &webp_data)
         .await
         .map_err(|e| format!("保存 WebP 缩略图失败: {}", e))?;
 
-    Ok((uuid, json_str))
+    // 4. 保存到数据库
+    let avatar_path = format!("/cards/{}/v1_thumbnail.webp", uuid);
+    save_card_model(db, uuid, json_val, Some(avatar_path), data_hash).await
 }
 
-async fn save_card_to_db(
+async fn process_json_card(
+    db: &DatabaseConnection,
+    data: &[u8],
+    storage_dir: std::path::PathBuf,
+) -> Result<(), String> {
+    let json_string = String::from_utf8(data.to_vec()).map_err(|_| "JSON 编码无效".to_string())?;
+    // 验证 JSON
+    let v: Value = serde_json::from_str(&json_string).map_err(|e| format!("无效的 JSON: {}", e))?;
+
+    // 检查是否为世界书
+    if v.get("entries").is_some() && v.get("data").is_none() && v.get("name").is_none() {
+        return Err("检测到世界书文件，请在世界书页面进行导入".to_string());
+    }
+    // 检查是否为有效的角色卡
+    if v.get("data").is_none() && v.get("name").is_none() {
+        return Err("无效的角色卡格式：缺少必要的 'data' 或 'name' 字段".to_string());
+    }
+
+    // 1. 检查重复
+    let compact_json = serde_json::to_string(&v).map_err(|e| format!("序列化 JSON 失败: {}", e))?;
+    let data_hash = compute_json_hash(&compact_json);
+
+    let existing = character_card::Entity::find()
+        .filter(character_card::Column::DataHash.eq(&data_hash))
+        .one(db)
+        .await
+        .map_err(|e| format!("数据库查询失败: {}", e))?;
+
+    if let Some(existing_card) = existing {
+        return Err(format!("角色卡已存在: {}", existing_card.name));
+    }
+
+    // 2. 保存文件 (Optional, but DB is primary)
+    let uuid = Uuid::new_v4();
+    let card_dir = storage_dir.join(uuid.to_string());
+    if !card_dir.exists() {
+        fs::create_dir_all(&card_dir)
+            .await
+            .map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+
+    // 3. 保存数据库
+    save_card_model(db, uuid, v, Some("/default.webp".to_string()), data_hash).await
+}
+
+// 提取的 PNG 元数据解析逻辑
+fn extract_png_metadata(data: &[u8]) -> Result<String, String> {
+    // PNG 签名校验
+    const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
+    if data.len() < 8 || &data[..8] != PNG_SIGNATURE {
+        return Err("非法的 PNG 文件签名".to_string());
+    }
+
+    let mut offset = 8;
+    while offset + 8 <= data.len() {
+        let length_bytes: [u8; 4] = data[offset..offset + 4].try_into().unwrap();
+        let length = u32::from_be_bytes(length_bytes) as usize;
+        let chunk_type = &data[offset + 4..offset + 8];
+        let data_start = offset + 8;
+        let data_end = data_start + length;
+
+        if data_end > data.len() {
+            warn!("PNG Chunk 越界，停止解析");
+            break;
+        }
+
+        if chunk_type == b"tEXt" {
+            let chunk_data = &data[data_start..data_end];
+            if let Some(null_pos) = chunk_data.iter().position(|&b| b == 0) {
+                let keyword_bytes = &chunk_data[..null_pos];
+                let text_bytes = &chunk_data[null_pos + 1..];
+                if let Ok(keyword) = String::from_utf8(keyword_bytes.to_vec()) {
+                    if keyword == "ccv3" || keyword == "chara" {
+                        if let Ok(decoded) = general_purpose::STANDARD.decode(text_bytes) {
+                            if let Ok(s) = String::from_utf8(decoded) {
+                                return Ok(s); // Found it!
+                            }
+                        } else if let Ok(s) = String::from_utf8(text_bytes.to_vec()) {
+                            return Ok(s); // Found it (raw)!
+                        }
+                    }
+                }
+            }
+        }
+        offset = data_end + 4;
+    }
+    Err("无效的角色卡图片：未找到元数据 (ccv3/chara)".to_string())
+}
+
+async fn save_card_model(
     db: &DatabaseConnection,
     uuid: Uuid,
-    json_str: String,
+    json: Value,
     avatar: Option<String>,
+    data_hash: String,
 ) -> Result<(), String> {
-    // 解析 JSON 仅用于提取索引字段，data 字段直接存原始字符串（不做任何修改）
-    let json: Value =
-        serde_json::from_str(&json_str).map_err(|e| format!("解析 JSON 失败: {}", e))?;
-
     // 规范化 V2/V3 结构 (仅用于提取字段)
     let card_data = if let Some(d) = json.get("data") {
         if d.is_object() {
@@ -388,7 +344,7 @@ async fn save_card_to_db(
         avatar: Set(avatar),
         spec: Set(spec),
         spec_version: Set(spec_version),
-        data: Set(pretty_json_str),
+        data: Set(pretty_json_str.clone()),
         created_at: Set(chrono::Utc::now().naive_utc()),
         updated_at: Set(chrono::Utc::now().naive_utc()),
         category_id: Set(None),
@@ -400,12 +356,29 @@ async fn save_card_to_db(
         custom_summary: Set(None),
         user_note: Set(None),
         metadata_modified: Set(false),
+        data_hash: Set(Some(data_hash)),
     };
 
     active_model
         .insert(db)
         .await
         .map_err(|e| format!("数据库错误: {}", e))?;
+
+    // --- Auto-create Initial Version (V1) ---
+    // Since this is a fresh import, we create the baseline version immediately.
+    let version = crate::entities::character_versions::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        character_id: Set(uuid),
+        version_number: Set("V1".to_string()),
+        note: Set(Some("初始导入".to_string())),
+        data: Set(pretty_json_str), // Use the formatted JSON
+        created_at: Set(chrono::Utc::now().naive_utc()),
+    };
+    if let Err(e) = version.insert(db).await {
+        tracing::error!("Failed to create initial version for card {}: {}", uuid, e);
+        // We do not fail the import if version creation fails, just log error.
+    }
+
     Ok(())
 }
 
@@ -565,48 +538,66 @@ pub async fn debug_import(
                         // 3. 模拟保存并读取
                         logs.push("尝试保存到数据库...".to_string());
                         let uuid = Uuid::new_v4();
-                        match save_card_to_db(&db, uuid, json_str.clone(), None).await {
-                            Ok(_) => {
-                                logs.push("保存成功。".to_string());
-                                logs.push(format!("UUID: {}", uuid));
 
-                                // 4. 从数据库回读验证
-                                logs.push("正在从数据库回读 verify...".to_string());
-                                match character_card::Entity::find_by_id(uuid).one(&db).await {
-                                    Ok(Some(model)) => {
-                                        logs.push("数据库读取成功。".to_string());
-                                        let db_data_len = model.data.len();
-                                        logs.push(format!("DB中 data 字段长度: {}", db_data_len));
+                        match serde_json::from_str::<Value>(&json_str) {
+                            Ok(json_val) => {
+                                let compact_json =
+                                    serde_json::to_string(&json_val).unwrap_or_default();
+                                let data_hash =
+                                    crate::utils::hash::compute_json_hash(&compact_json);
 
-                                        let raw_val: Result<Value, _> =
-                                            serde_json::from_str(&json_str);
-                                        let saved_val: Result<Value, _> =
-                                            serde_json::from_str(&model.data);
+                                match save_card_model(&db, uuid, json_val, None, data_hash).await {
+                                    Ok(_) => {
+                                        logs.push("保存成功。".to_string());
+                                        logs.push(format!("UUID: {}", uuid));
 
-                                        match (raw_val, saved_val) {
-                                            (Ok(v1), Ok(v2)) => {
-                                                if v1 == v2 {
-                                                    logs.push("验证通过：数据内容一致 (Ignored formatting)。".to_string());
-                                                } else {
-                                                    logs.push(
-                                                        "验证失败：数据内容不一致！".to_string(),
-                                                    );
+                                        // 4. 从数据库回读验证
+                                        logs.push("正在从数据库回读 verify...".to_string());
+                                        match character_card::Entity::find_by_id(uuid)
+                                            .one(&db)
+                                            .await
+                                        {
+                                            Ok(Some(model)) => {
+                                                logs.push("数据库读取成功。".to_string());
+                                                let db_data_len = model.data.len();
+                                                logs.push(format!(
+                                                    "DB中 data 字段长度: {}",
+                                                    db_data_len
+                                                ));
+
+                                                let raw_val: Result<Value, _> =
+                                                    serde_json::from_str(&json_str);
+                                                let saved_val: Result<Value, _> =
+                                                    serde_json::from_str(&model.data);
+
+                                                match (raw_val, saved_val) {
+                                                    (Ok(v1), Ok(v2)) => {
+                                                        if v1 == v2 {
+                                                            logs.push("验证通过：数据内容一致 (Ignored formatting)。".to_string());
+                                                        } else {
+                                                            logs.push(
+                                                                "验证失败：数据内容不一致！"
+                                                                    .to_string(),
+                                                            );
+                                                        }
+                                                    }
+                                                    _ => logs.push(
+                                                        "验证警告：无法解析 JSON 进行比对。"
+                                                            .to_string(),
+                                                    ),
                                                 }
-                                            }
-                                            _ => logs.push(
-                                                "验证警告：无法解析 JSON 进行比对。".to_string(),
-                                            ),
-                                        }
 
-                                        saved_json = Some(model.data);
+                                                saved_json = Some(model.data);
+                                            }
+                                            Ok(None) => logs
+                                                .push("错误：保存后无法查找到记录！".to_string()),
+                                            Err(e) => logs.push(format!("回读查询失败: {}", e)),
+                                        }
                                     }
-                                    Ok(None) => {
-                                        logs.push("错误：保存后无法查找到记录！".to_string())
-                                    }
-                                    Err(e) => logs.push(format!("回读查询失败: {}", e)),
+                                    Err(e) => logs.push(format!("保存数据库失败: {}", e)),
                                 }
                             }
-                            Err(e) => logs.push(format!("保存数据库失败: {}", e)),
+                            Err(e) => logs.push(format!("JSON 解析失败: {}", e)),
                         }
                     } else {
                         logs.push("错误：未找到有效元数据。".to_string());
@@ -1256,6 +1247,9 @@ pub async fn soft_delete(
 
     Ok(StatusCode::OK)
 }
+
+/// POST /api/cards/{id}/overwrite - 覆盖现有角色卡
+/// 删除旧记录并重新导入新文件
 
 // ============ 回收站 API ============
 

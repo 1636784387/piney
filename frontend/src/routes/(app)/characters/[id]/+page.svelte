@@ -48,6 +48,7 @@
     import ImageCropperDialog from "$lib/components/ui/ImageCropperDialog.svelte";
     import RegexTab from "$lib/components/character/regex/RegexTab.svelte";
     import ChatHistoryTab from "$lib/components/character/history/ChatHistoryTab.svelte";
+    import VersionHistoryTab from "$lib/components/character/versions/VersionHistoryTab.svelte";
 
     import { API_BASE, resolveUrl } from "$lib/api";
     let cardId = $page.params.id;
@@ -638,8 +639,8 @@
         { id: "persona", label: "设定", icon: IdCard },
         { id: "world_info", label: "世界书", icon: Globe }, 
         { id: "regex", label: "正则脚本", icon: Regex },
+        { id: "versions", label: "版本历史", icon: GitBranch }, // New Tab
         { id: "chat", label: "聊天记录", icon: History },
-        { id: "versions", label: "版本历史", icon: GitBranch }, // Placeholder
     ];
 
     // Helper function
@@ -1299,6 +1300,17 @@
                     {/if}
                 </div>
             </div>
+            <!-- Version History Tab -->
+            <div class={activeTab === "versions" ? "" : "hidden"}>
+                 <div class="space-y-6 max-w-4xl mx-auto pb-10">
+                     <VersionHistoryTab
+                         {cardId}
+                         currentVersion={card.version}
+                         onRestore={loadCard}
+                     />
+                </div>
+            </div>
+
             <!-- Chat History Tab -->
             <div class={activeTab === "chat" ? "" : "hidden"}>
                  <div class="space-y-6 max-w-4xl mx-auto pb-10">
