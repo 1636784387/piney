@@ -39,7 +39,7 @@
     function addGreeting() {
         // Ensure alternateGreetings is initialized
         if (!alternateGreetings) alternateGreetings = [];
-        alternateGreetings.push("");
+        alternateGreetings = [...alternateGreetings, ""];
         currentIndex = totalCount - 1; // Jump to new one
         toast.success("已添加新开场白");
     }

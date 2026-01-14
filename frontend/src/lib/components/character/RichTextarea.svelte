@@ -90,7 +90,7 @@
                 <Fullscreen class="h-4 w-4" />
                 {label || "编辑内容"}
             </Dialog.Title>
-            <Dialog.Description>代码编辑器模式，不编辑代码也行。</Dialog.Description>
+            <Dialog.Description>全屏编辑模式。</Dialog.Description>
         </Dialog.Header>
         <div class="flex-1 min-h-0 mt-4 overflow-hidden rounded-md border">
             {#if useCodeEditor}
