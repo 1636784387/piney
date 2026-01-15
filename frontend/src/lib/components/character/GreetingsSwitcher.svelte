@@ -9,15 +9,20 @@
         Trash2,
         Maximize2,
         MessageSquare,
+        Wand
     } from "lucide-svelte";
     import RichTextarea from "./RichTextarea.svelte";
     import { toast } from "svelte-sonner";
     import { cn } from "$lib/utils";
+    import { renderContent } from "$lib/utils/textRenderer";
+    import HTMLRender from "$lib/components/render/HTMLRender.svelte";
+    import * as Dialog from "$lib/components/ui/dialog";
 
     let {
         firstMes = $bindable(),
         alternateGreetings = $bindable([]),
         isDirty = false,
+        regexScripts = [],
         class: className = undefined,
     } = $props();
 
@@ -71,6 +76,19 @@
     }
 
     let isZenMode = $state(false);
+    let isPreviewOpen = $state(false);
+    let previewContent = $state("");
+
+    function togglePreview() {
+        if (!regexScripts) {
+             // Optional: warn user but still render without scripts
+             // toast.error("未找到正则脚本配置"); 
+             previewContent = renderContent(currentIndex === 0 ? firstMes : alternateGreetings[currentIndex - 1], []);
+        } else {
+             previewContent = renderContent(currentIndex === 0 ? firstMes : alternateGreetings[currentIndex - 1], regexScripts);
+        }
+        isPreviewOpen = true;
+    }
 </script>
 
 <div
@@ -124,6 +142,16 @@
 
             <div class="w-px h-4 bg-border mx-1"></div>
 
+             <Button
+                variant="ghost"
+                size="icon"
+                class="h-7 w-7 text-muted-foreground hover:text-foreground"
+                onclick={togglePreview}
+                title="预览渲染效果"
+            >
+                <Wand class="h-4 w-4" />
+            </Button>
+
             <Button
                 variant="ghost"
                 size="icon"
@@ -175,3 +203,17 @@
         />
     {/if}
 </div>
+
+<Dialog.Root bind:open={isPreviewOpen}>
+    <Dialog.Content class="!max-w-none !w-[90vw] md:!w-[60vw] lg:!w-[45vw] h-[80vh] flex flex-col p-0 gap-0">
+        <Dialog.Header class="px-6 py-4 border-b">
+            <Dialog.Title>开场白预览</Dialog.Title>
+        </Dialog.Header>
+        <div class="flex-1 overflow-y-auto p-6 bg-muted/10">
+             <HTMLRender content={previewContent} />
+        </div>
+        <Dialog.Footer class="px-6 py-4 border-t bg-muted/20">
+            <Button variant="outline" onclick={() => isPreviewOpen = false}>关闭</Button>
+        </Dialog.Footer>
+    </Dialog.Content>
+</Dialog.Root>

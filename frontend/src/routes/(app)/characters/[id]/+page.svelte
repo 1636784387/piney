@@ -1152,6 +1152,11 @@
                                         bind:alternateGreetings={
                                             formAltGreetings
                                         }
+                                        regexScripts={
+                                            card?.data?.data?.extensions?.regex_scripts || 
+                                            card?.data?.extensions?.regex_scripts || 
+                                            []
+                                        }
                                         isDirty={isGreetingsDirty}
                                         class="border-0 shadow-none bg-transparent"
                                     />
