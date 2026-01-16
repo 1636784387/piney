@@ -811,10 +811,9 @@
                                         >
                                             {card.name}
                                         </h1>
-                                        <span
-                                            >Created by {card.author ||
-                                                "Unknown"}</span
-                                        >
+                                        {#if card.author}
+                                            <span>Created by {card.author}</span>
+                                        {/if}
                                     </div>
                                 </div>
 
