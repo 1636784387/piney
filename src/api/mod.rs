@@ -99,5 +99,12 @@ pub fn routes(db: DatabaseConnection) -> Router {
         .route("/ai/models", get(ai::list_models_proxy))
         .route("/ai/card/overview", post(ai::generate_overview))
         .route("/ai/execute", post(ai::execute_feature))
+        // 小皮医生
+        .route("/ai/doctor/analyze", post(ai::doctor_analyze))
+        .route("/ai/doctor/history/{card_id}", get(ai::doctor_history))
+        .route(
+            "/ai/doctor/history/item/{id}",
+            delete(ai::doctor_history_delete),
+        )
         .with_state(db)
 }

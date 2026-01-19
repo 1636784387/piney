@@ -49,12 +49,18 @@
     import RegexTab from "$lib/components/character/regex/RegexTab.svelte";
     import ChatHistoryTab from "$lib/components/character/history/ChatHistoryTab.svelte";
     import VersionHistoryTab from "$lib/components/character/versions/VersionHistoryTab.svelte";
+    import DoctorDialog from "$lib/components/character/DoctorDialog.svelte";
+    import { doctorTasks } from "$lib/ai/doctor";
 
     import { API_BASE, resolveUrl } from "$lib/api";
     let cardId = $page.params.id;
     let card: any = null;
     let loading = true;
     let activeTab = $page.url.searchParams.get("tab") || "overview";
+
+    // Doctor Dialog State
+    let showDoctorDialog = false;
+    $: isDoctorRunning = $doctorTasks[cardId]?.status === 'analyzing';
 
     // Data for Overview
     let editingNote = "";
@@ -994,7 +1000,7 @@
 
                                 <!-- Dr. Piney (Review System) -->
                                 <div
-                                    class="bg-primary/5 rounded-xl p-5 border border-primary/20 flex items-center justify-between gap-4"
+                                    class="bg-primary/5 rounded-xl p-5 border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                                 >
                                     <div class="flex items-center gap-4">
                                         <div
@@ -1018,16 +1024,22 @@
                                             <p
                                                 class="text-xs text-muted-foreground leading-relaxed"
                                             >
-                                                AI 驱动的角色卡质量诊断与优化。
+                                                AI 驱动的角色卡质量诊断与优化（实验功能，如果角色卡很庞大，会相对比较消耗token，诊断结果仅供参考）。
                                             </p>
                                         </div>
                                     </div>
                                     <Button
                                         size="sm"
-                                        class="h-8 text-xs gap-2 shrink-0"
+                                        class="h-8 text-xs gap-2 shrink-0 w-full sm:w-auto"
+                                        onclick={() => (showDoctorDialog = true)}
                                     >
-                                        <Sparkles class="h-3.5 w-3.5" />
-                                        开始诊断
+                                        {#if isDoctorRunning}
+                                            <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                                            诊断中...
+                                        {:else}
+                                            <Sparkles class="h-3.5 w-3.5" />
+                                            开始诊断
+                                        {/if}
                                     </Button>
                                 </div>
                             </div>
@@ -1405,6 +1417,13 @@
         bind:open={showCropper} 
         imageSrc={cropperImageSrc} 
         on:confirm={handleCropConfirm} 
+    />
+
+    <!-- Doctor Dialog -->
+    <DoctorDialog
+        bind:open={showDoctorDialog}
+        cardId={cardId}
+        onClose={() => (showDoctorDialog = false)}
     />
 </div>
     </div>

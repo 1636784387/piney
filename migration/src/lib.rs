@@ -16,6 +16,7 @@ mod m20260109_000002_add_regex_scripts_to_history;
 mod m20260113_000001_create_character_versions;
 mod m20260113_000002_add_data_hash;
 mod m20260114_000001_add_token_counts;
+mod m20260120_000001_create_doctor_tasks;
 
 pub struct Migrator;
 
@@ -37,6 +38,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260113_000001_create_character_versions::Migration),
             Box::new(m20260113_000002_add_data_hash::Migration),
             Box::new(m20260114_000001_add_token_counts::Migration),
+            Box::new(m20260120_000001_create_doctor_tasks::Migration),
         ]
     }
 }

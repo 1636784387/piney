@@ -886,11 +886,6 @@ pub async fn execute_feature(
     });
 
     // 调试日志：打印请求内容
-    tracing::info!("AI Request URL: {}", url);
-    tracing::info!(
-        "AI Request Body: {}",
-        serde_json::to_string_pretty(&body).unwrap_or_default()
-    );
 
     let res = client
         .post(&url)
@@ -912,8 +907,6 @@ pub async fn execute_feature(
     let raw_text = res.text().await.unwrap_or_default();
 
     // 调试日志：打印响应内容
-    tracing::info!("AI Response Status: {}", status);
-    tracing::info!("AI Response Body: {}", raw_text);
 
     if !status.is_success() {
         return Err((
@@ -931,4 +924,646 @@ pub async fn execute_feature(
     })?;
 
     Ok(Json(json))
+}
+
+// ==================== 小皮医生 (Doctor) API ====================
+
+use crate::entities::doctor_task;
+use axum::response::sse::{Event, Sse};
+use futures::stream::{self, Stream};
+use std::convert::Infallible;
+use std::time::Duration;
+
+#[derive(Deserialize)]
+pub struct DoctorAnalyzeRequest {
+    pub card_id: Uuid,
+}
+
+#[derive(Serialize)]
+pub struct DoctorHistoryItem {
+    pub id: Uuid,
+    pub status: String,
+    pub final_report: Option<String>,
+    pub created_at: String,
+}
+
+/// SSE 进度事件
+#[derive(Serialize, Clone)]
+struct SseProgress {
+    status: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    report: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    debug: Option<String>,
+}
+
+/// POST /api/ai/doctor/analyze - 执行诊断 (SSE)
+pub async fn doctor_analyze(
+    State(db): State<DatabaseConnection>,
+    Json(payload): Json<DoctorAnalyzeRequest>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, Json<Value>)> {
+    let card_id = payload.card_id;
+
+    // 检查是否有正在运行的任务
+    let running_task = doctor_task::Entity::find()
+        .filter(doctor_task::Column::CharacterId.eq(card_id))
+        .filter(doctor_task::Column::Status.eq("running"))
+        .one(&db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?;
+
+    if running_task.is_some() {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error": "已有正在运行的诊断任务"})),
+        ));
+    }
+
+    // 获取角色卡数据
+    let card = character_card::Entity::find_by_id(card_id)
+        .one(&db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "角色卡不存在"})),
+            )
+        })?;
+
+    // 获取 AI 配置
+    let settings = setting::Entity::find().all(&db).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+    })?;
+
+    let settings_map: std::collections::HashMap<String, String> =
+        settings.into_iter().map(|s| (s.key, s.value)).collect();
+
+    let global_prompt = settings_map
+        .get("global_prompt")
+        .cloned()
+        .unwrap_or_default();
+    let channel_id_str = settings_map
+        .get("ai_config_global")
+        .cloned()
+        .unwrap_or_default();
+
+    if channel_id_str.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "没有配置全局AI模型"})),
+        ));
+    }
+
+    let channel_id = Uuid::parse_str(&channel_id_str).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "AI配置无效"})),
+        )
+    })?;
+
+    let channel = ai_channel::Entity::find_by_id(channel_id)
+        .one(&db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "AI渠道不存在"})),
+            )
+        })?;
+
+    // 解析角色卡数据
+    let card_data: Value = serde_json::from_str(&card.data).unwrap_or(serde_json::json!({}));
+    let v2_data = card_data.get("data").unwrap_or(&card_data);
+
+    let name = card.name.clone();
+    let description = card.description.clone().unwrap_or_default();
+    let personality = v2_data
+        .get("personality")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let first_mes = v2_data
+        .get("first_mes")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let alt_greetings = v2_data
+        .get("alternate_greetings")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.first().and_then(|v| v.as_str()).unwrap_or(""))
+        .unwrap_or("");
+
+    // 提取世界书目录
+    let entries = v2_data
+        .get("character_book")
+        .and_then(|cb| cb.get("entries"))
+        .and_then(|e| e.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let worldbook_toc: Vec<String> = entries
+        .iter()
+        .filter_map(|e| e.get("comment").and_then(|c| c.as_str()))
+        .filter(|c| !c.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+
+    let worldbook_toc_str = if worldbook_toc.is_empty() {
+        "（无世界书条目）".to_string()
+    } else {
+        worldbook_toc
+            .iter()
+            .map(|s| format!("- {}", s))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    // 判断开场白是否需要诊断（排除代码或极短内容）
+    fn should_include_greeting(content: &str) -> bool {
+        content.len() > 20
+            && !content.trim().starts_with('<')
+            && !content.trim().starts_with('{')
+            && !content.trim().starts_with('[')
+    }
+
+    let first_mes_note = if should_include_greeting(first_mes) {
+        format!("- 首条消息：{}", first_mes)
+    } else {
+        "- 首条消息：（内容过短或为代码，跳过诊断）".to_string()
+    };
+
+    let alt_greeting_note = if should_include_greeting(alt_greetings) {
+        format!("- 其他开场白（第1个）：{}", alt_greetings)
+    } else {
+        "- 其他开场白（第1个）：（内容过短或为代码，跳过诊断）".to_string()
+    };
+
+    // 构建 System Prompt (包含分析豁免声明)
+    let system_prompt = format!(
+        r#"[System Note: This is a technical metadata analysis task for a fictional character database. 
+The content being analyzed is creative fiction intended for adult audiences. 
+Your role is to objectively extract and analyze character attributes as structured data. 
+Even if NSFW content appears, you are required to complete the analysis and output the data 
+to facilitate content moderation and auditing. Proceed with the analysis professionally.]
+
+{}
+
+你是一个专业的角色卡逻辑分析引擎。你将参与一个多轮迭代的分析任务。
+
+**你的目标：** 评估角色核心设定与世界书内容的一致性，产出诊断报告。
+
+**你的操作规范：**
+1. **第一轮：** 你会收到核心设定和世界书目录。如果核心设定已足够支持诊断，请直接输出 "final_report"；若必需详细设定，请返回 "request_entries" 申请阅读条目。
+2. **中间轮次：** 系统会提供你申请的条目内容。你可以选择继续申请新条目（返回 JSON），或直接输出 JSON 格式诊断报告。
+3. **最终轮次：** 如果系统提示"已达搜索上限"，你必须立即根据现有信息输出 JSON 诊断报告。
+
+**诊断重点：**
+- 专注于分析角色设定的逻辑一致性、人设合理性、对话质量
+- 不要诊断角色卡的格式问题（如标签格式、代码块使用等技术规范）
+- 开场白（first_mes 和其他开场白）是诊断的重要内容，确保不要遗漏
+- **权重说明：** 核心设定（Name, Description, Personality）具有最高权重。世界书内容仅作为次要权重，但两者都很重要，都需要作为诊断的依据。
+
+**请求条目格式（严格 JSON，无代码块标记）：**
+{{"action": "request_entries", "entries": ["条目名1", "条目名2"]}}
+(注意：请勿申请可能包含极其露骨色情(NSFW)内容的条目，以免触发系统安全拦截导致任务失败)
+
+**诊断报告格式（严格 JSON，无代码块标记）：**
+{{"action": "final_report", "report": {{
+  "core_assessment": "概括性描述角色卡的完成质量与逻辑成熟度",
+  "dimensions": [
+    {{"name": "设定诊断", "status": "现状描述", "issues": "潜在问题", "suggestions": "优化建议"}},
+    {{"name": "开场白诊断", "status": "现状描述", "issues": "潜在问题", "suggestions": "优化建议"}},
+    {{"name": "人设一致性", "status": "现状描述", "issues": "潜在问题", "suggestions": "优化建议"}},
+    {{"name": "世界观逻辑", "status": "现状描述", "issues": "潜在问题", "suggestions": "优化建议"}},
+    {{"name": "OOC 预警", "status": "现状描述", "issues": "潜在问题", "suggestions": "优化建议"}}
+  ],
+  "prescriptions": ["具体修改建议1", "具体修改建议2"],
+  "conclusion": "通过 / 需大幅修正 / 建议重构"
+}}}}
+
+**重要：** 所有输出必须是纯 JSON，不要包含 markdown 代码块标记。dimensions 中各字段可以使用 Markdown 格式（加粗、列表等）来增强可读性。"#,
+        global_prompt
+    );
+
+    // 构建初始 User Message
+    let initial_user_msg = format!(
+        r#"**[任务启动]** 请审阅以下内容，并返回你第一轮想要阅读的世界书条目名称（JSON 格式）。
+
+**核心设定：**
+- 角色名称：{}
+- 角色描述：{}
+- 性格特征：{}
+{}
+{}
+
+**世界书目录（条目名称列表）：**
+{}
+
+请返回 JSON 格式：{{"action": "request_entries", "entries": ["条目名1", ...]}}
+如果世界书目录为空或无需阅读条目，请直接输出诊断报告 JSON。请优先判断当前信息是否足够，避免不必要的搜索。同时请严格避开 NSFW 相关条目。"#,
+        name, description, personality, first_mes_note, alt_greeting_note, worldbook_toc_str
+    );
+
+    // 克隆需要的数据到 async 块
+    let db_clone = db.clone();
+    let channel_clone = channel.clone();
+    let entries_clone = entries.clone();
+
+    // 创建 SSE 流 (不再需要 task_id，只在成功时保存)
+    let stream = stream::unfold(
+        (
+            db_clone,
+            card_id, // 使用 card_id 替代 task_id
+            channel_clone,
+            entries_clone,
+            vec![
+                serde_json::json!({"role": "system", "content": system_prompt}),
+                serde_json::json!({"role": "user", "content": initial_user_msg}),
+            ],
+            0usize, // iteration count
+        ),
+        |(db, card_id, channel, entries, mut messages, iteration)| async move {
+            let sent_messages = messages.clone(); // Capture state before mutation for debug logging
+
+            // 发送进度事件
+            let _progress_msg = match iteration {
+                0 => "正在阅读详细设定及世界书目录...",
+                1 => "第一次获取关联度较高的世界书条目内容...",
+                _ => "报告生成中...",
+            };
+
+            // 如果已经完成或达到上限
+            if iteration > 2 {
+                return None;
+            }
+
+            // 调用 AI
+            let client = reqwest::Client::new();
+            let base = channel.base_url.trim_end_matches('/');
+            let url = format!("{}/chat/completions", base);
+
+            let body = serde_json::json!({
+                "model": channel.model_id,
+                "messages": messages,
+                "temperature": 0.7
+            });
+
+            let res = match client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", channel.api_key))
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::error!("Doctor AI network error: {}", e);
+                    let event = Event::default().data(
+                        serde_json::to_string(&SseProgress {
+                            status: "error".to_string(),
+                            message: format!("AI 请求失败: {}", e),
+                            report: None,
+                            debug: None,
+                        })
+                        .unwrap(),
+                    );
+                    return Some((Ok(event), (db, card_id, channel, entries, messages, 999)));
+                }
+            };
+
+            // 检查 HTTP 状态码
+            let status = res.status();
+            let raw_text = res.text().await.unwrap_or_default();
+
+            // 调试日志
+
+            // 如果 HTTP 状态不是成功
+            if !status.is_success() {
+                let event = Event::default().data(
+                    serde_json::to_string(&SseProgress {
+                        status: "error".to_string(),
+                        message: format!(
+                            "AI 服务返回错误 (HTTP {}): {}",
+                            status.as_u16(),
+                            raw_text.chars().take(200).collect::<String>()
+                        ),
+                        report: None,
+                        debug: None,
+                    })
+                    .unwrap(),
+                );
+                return Some((Ok(event), (db, card_id, channel, entries, messages, 999)));
+            }
+
+            let json: Value = match serde_json::from_str(&raw_text) {
+                Ok(j) => j,
+                Err(e) => {
+                    tracing::error!(
+                        "Doctor AI JSON parse error: {}, raw: {}",
+                        e,
+                        raw_text.chars().take(200).collect::<String>()
+                    );
+                    let event = Event::default().data(
+                        serde_json::to_string(&SseProgress {
+                            status: "error".to_string(),
+                            message: format!("AI 响应解析失败: {} (可能是空响应)", e),
+                            report: None,
+                            debug: None,
+                        })
+                        .unwrap(),
+                    );
+                    return Some((Ok(event), (db, card_id, channel, entries, messages, 999)));
+                }
+            };
+
+            // 提取 AI 回复内容
+            let ai_content = json
+                .get("choices")
+                .and_then(|c| c.get(0))
+                .and_then(|c| c.get("message"))
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_str())
+                .unwrap_or("");
+
+            // 检查空响应
+            if ai_content.is_empty() {
+                tracing::warn!(
+                    "Doctor AI returned empty content, full response: {:?}",
+                    json
+                );
+                let event = Event::default().data(
+                    serde_json::to_string(&SseProgress {
+                        status: "error".to_string(),
+                        message: "AI 返回了空内容，可能是内容审核限制导致。请尝试使用其他模型或检查角色卡内容。".to_string(),
+                        report: None,
+                        debug: None,
+                    })
+                    .unwrap(),
+                );
+                return Some((Ok(event), (db, card_id, channel, entries, messages, 999)));
+            }
+
+            // 智能提取 JSON 部分（寻找最外层的 {}，忽略前后的废话）
+            let cleaned =
+                if let (Some(start), Some(end)) = (ai_content.find('{'), ai_content.rfind('}')) {
+                    if start <= end {
+                        &ai_content[start..=end]
+                    } else {
+                        ai_content.trim()
+                    }
+                } else {
+                    ai_content.trim()
+                };
+
+            // 解析 AI 响应
+            let ai_response: Value = match serde_json::from_str(cleaned) {
+                Ok(v) => v,
+                Err(_) => {
+                    // AI 返回了非 JSON，可能是直接的报告文本，尝试包装
+                    serde_json::json!({
+                        "action": "final_report",
+                        "report": {
+                            "core_assessment": ai_content,
+                            "dimensions": [],
+                            "prescriptions": [],
+                            "conclusion": "解析失败，请查看原始内容"
+                        }
+                    })
+                }
+            };
+
+            let action = ai_response
+                .get("action")
+                .and_then(|a| a.as_str())
+                .unwrap_or("final_report");
+
+            if action == "request_entries" && iteration < 2 {
+                // AI 请求更多条目
+                let requested: Vec<String> = ai_response
+                    .get("entries")
+                    .and_then(|e| e.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // 查找对应条目内容
+                let mut fetched_content = String::new();
+                let mut found_entries = Vec::new();
+                for entry in &entries {
+                    let comment = entry.get("comment").and_then(|c| c.as_str()).unwrap_or("");
+                    let content = entry.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                    if requested
+                        .iter()
+                        .any(|r| comment.contains(r) || r.contains(comment))
+                    {
+                        fetched_content.push_str(&format!("\n[{}]:\n{}\n", comment, content));
+                        found_entries.push(comment.to_string());
+                    }
+                }
+
+                if fetched_content.is_empty() {
+                    fetched_content = "（未找到匹配的条目）".to_string();
+                }
+
+                // 添加 AI 回复和新的用户消息
+                messages.push(serde_json::json!({"role": "assistant", "content": ai_content}));
+
+                let inject_msg = if iteration == 1 {
+                    format!(
+                        r#"**[系统指令：强制终审]** 这是最后一份补充内容：
+
+{}
+
+**注意：** 搜索深度已达上限。请不再提出新请求，立即整合历史所有信息，输出最终的诊断报告 JSON。"#,
+                        fetched_content
+                    )
+                } else {
+                    format!(
+                        r#"**[条目内容注入]** 这是你申请阅读的条目详细内容：
+
+{}
+
+**请决策：**
+- 如果需要更多信息，请返回 JSON：{{"action": "request_entries", "entries": ["新条目名1", ...]}}
+- 如果信息已足够，请按诊断报告格式输出 JSON。"#,
+                        fetched_content
+                    )
+                };
+
+                messages.push(serde_json::json!({"role": "user", "content": inject_msg}));
+
+                // 构建进度消息
+                let progress_msg = if found_entries.is_empty() {
+                    "正在分析条目关联性...".to_string()
+                } else {
+                    format!("正在阅读条目：{}", found_entries.join(", "))
+                };
+
+                // 发送调试信息（全量日志）
+                let debug_info = serde_json::json!({
+                    "iteration": iteration,
+                    "sent_messages": sent_messages, // 完整发送给 AI 的内容
+                    "ai_response": ai_content,
+                    "next_prompt": inject_msg // 下一轮将注入的
+                })
+                .to_string();
+
+                // 发送进度事件
+                let event = Event::default().data(
+                    serde_json::to_string(&SseProgress {
+                        status: "progress".to_string(),
+                        message: progress_msg,
+                        report: None,
+                        debug: Some(debug_info), // 添加调试字段
+                    })
+                    .unwrap(),
+                );
+
+                Some((
+                    Ok(event),
+                    (db, card_id, channel, entries, messages, iteration + 1),
+                ))
+            } else {
+                // 最终报告
+                let report = ai_response
+                    .get("report")
+                    .cloned()
+                    .unwrap_or(ai_response.clone());
+
+                // 只在成功时保存到数据库
+                let _ = create_task_record(
+                    &db,
+                    card_id,
+                    serde_json::to_string(&report).unwrap_or_default(),
+                )
+                .await;
+
+                let debug_info = serde_json::json!({
+                    "iteration": iteration,
+                    "sent_messages": sent_messages, // 完整发送给 AI 的内容列表
+                    "ai_response": ai_content
+                })
+                .to_string();
+
+                let event = Event::default().data(
+                    serde_json::to_string(&SseProgress {
+                        status: "complete".to_string(),
+                        message: "诊断完成".to_string(),
+                        report: Some(report),
+                        debug: Some(debug_info),
+                    })
+                    .unwrap(),
+                );
+
+                Some((Ok(event), (db, card_id, channel, entries, messages, 999)))
+            }
+        },
+    );
+
+    Ok(Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("keep-alive"),
+    ))
+}
+
+/// 创建成功的任务记录（只在成功时调用）
+async fn create_task_record(
+    db: &DatabaseConnection,
+    card_id: Uuid,
+    report: String,
+) -> Result<(), sea_orm::DbErr> {
+    let task_id = Uuid::new_v4();
+    let now = chrono::Utc::now().naive_utc();
+    let task_model = doctor_task::ActiveModel {
+        id: Set(task_id),
+        character_id: Set(card_id),
+        status: Set("success".to_string()),
+        final_report: Set(Some(report)),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+
+    doctor_task::Entity::insert(task_model)
+        .exec_without_returning(db)
+        .await?;
+    Ok(())
+}
+
+/// GET /api/ai/doctor/history/{card_id} - 获取诊断历史
+pub async fn doctor_history(
+    State(db): State<DatabaseConnection>,
+    Path(card_id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
+    let tasks = doctor_task::Entity::find()
+        .filter(doctor_task::Column::CharacterId.eq(card_id))
+        .order_by_desc(doctor_task::Column::CreatedAt)
+        .all(&db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?;
+
+    let items: Vec<DoctorHistoryItem> = tasks
+        .into_iter()
+        .map(|t| DoctorHistoryItem {
+            id: t.id,
+            status: t.status,
+            final_report: t.final_report,
+            created_at: t.created_at.format("%Y-%m-%d %H:%M").to_string(),
+        })
+        .collect();
+
+    Ok(Json(items))
+}
+
+/// DELETE /api/ai/doctor/history/{id} - 删除诊断记录
+pub async fn doctor_history_delete(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
+    let result = doctor_task::Entity::delete_by_id(id)
+        .exec(&db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?;
+
+    if result.rows_affected == 0 {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Task not found"})),
+        ));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }

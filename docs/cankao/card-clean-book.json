@@ -1,5 +1,5 @@
 {
-    "name": "关联干净的世界书",
+    "name": "关联世界书的角色卡-无正则",
     "description": "",
     "personality": "",
     "scenario": "",
@@ -13,7 +13,7 @@
     "spec": "chara_card_v3",
     "spec_version": "3.0",
     "data": {
-        "name": "关联干净的世界书",
+        "name": "关联世界书的角色卡-无正则",
         "description": "",
         "personality": "",
         "scenario": "",
@@ -29,7 +29,7 @@
         "extensions": {
             "talkativeness": "0.5",
             "fav": false,
-            "world": "干净的插入",
+            "world": "世界书名称",
             "depth_prompt": {
                 "prompt": "",
                 "depth": 4,
