@@ -89,6 +89,8 @@
 
     // 拖拽状态
     let draggedCategoryId: string | null = $state(null);
+    let dragOverCategoryId: string | null = $state(null);
+    let dragPosition: "top" | "bottom" | null = $state(null);
 
     // 排序状态
     let currentSort = $state("updated_at");
@@ -275,38 +277,55 @@
         draggedCategoryId = categoryId;
     }
 
-    function handleDragOver(e: DragEvent) {
+    function handleDragOver(e: DragEvent, targetId: string) {
         e.preventDefault();
+        if (draggedCategoryId === targetId) return;
+
+        const el = e.currentTarget as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        const mid = rect.y + rect.height / 2;
+        
+        dragOverCategoryId = targetId;
+        dragPosition = e.clientY < mid ? "top" : "bottom";
+    }
+
+    function resetDragState() {
+        draggedCategoryId = null;
+        dragOverCategoryId = null;
+        dragPosition = null;
     }
 
     function handleDrop(targetCategoryId: string) {
         if (!draggedCategoryId || draggedCategoryId === targetCategoryId) {
-            draggedCategoryId = null;
+            resetDragState();
             return;
         }
 
-        // 重新排序
-        const draggedIndex = categories.findIndex(
-            (c) => c.id === draggedCategoryId,
-        );
-        const targetIndex = categories.findIndex(
-            (c) => c.id === targetCategoryId,
-        );
-
-        if (draggedIndex === -1 || targetIndex === -1) {
-            draggedCategoryId = null;
+        const draggedItem = categories.find(c => c.id === draggedCategoryId);
+        if (!draggedItem) {
+            resetDragState();
             return;
         }
 
-        // 移动元素
-        const newCategories = [...categories];
-        const [removed] = newCategories.splice(draggedIndex, 1);
-        newCategories.splice(targetIndex, 0, removed);
-        categories = newCategories;
-
-        // 调用 API 保存排序
-        saveOrder(newCategories.map((c) => c.id));
-        draggedCategoryId = null;
+        // Create new array without dragged item
+        const newCategories = categories.filter(c => c.id !== draggedCategoryId);
+        
+        // Find target index in the new array
+        let targetIndex = newCategories.findIndex(c => c.id === targetCategoryId);
+        
+        if (targetIndex !== -1) {
+            // Adjust index based on position
+            if (dragPosition === 'bottom') {
+                targetIndex += 1;
+            }
+            // Insert
+            newCategories.splice(targetIndex, 0, draggedItem);
+            
+            categories = newCategories;
+            saveOrder(newCategories.map((c) => c.id));
+        }
+        
+        resetDragState();
     }
 
     async function saveOrder(ids: string[]) {
@@ -748,15 +767,26 @@
                     <div class="space-y-2 max-h-60 overflow-y-auto">
                         {#each categories as category (category.id)}
                             <div
-                                class="flex items-center gap-2 p-2 rounded-lg border transition-colors bg-background"
+                                class="relative flex items-center gap-2 p-2 rounded-lg border transition-colors bg-background group"
                                 class:bg-accent={draggedCategoryId ===
                                     category.id}
+                                class:opacity-50={draggedCategoryId === category.id}
                                 draggable="true"
                                 ondragstart={() => handleDragStart(category.id)}
-                                ondragover={handleDragOver}
+                                ondragover={(e) => handleDragOver(e, category.id)}
                                 ondrop={() => handleDrop(category.id)}
+                                ondragend={resetDragState}
                                 animate:flip={{ duration: 200 }}
                             >
+                                {#if dragOverCategoryId === category.id && draggedCategoryId !== category.id}
+                                    <div 
+                                        class="absolute left-0 right-0 h-[2px] bg-primary z-20 pointer-events-none transition-all"
+                                        class:top-0={dragPosition === 'top'}
+                                        class:-top-[1px]={dragPosition === 'top'}
+                                        class:bottom-0={dragPosition === 'bottom'}
+                                        class:-bottom-[1px]={dragPosition === 'bottom'}
+                                    ></div>
+                                {/if}
                                 <GripVertical
                                     class="h-4 w-4 text-muted-foreground cursor-grab"
                                 />

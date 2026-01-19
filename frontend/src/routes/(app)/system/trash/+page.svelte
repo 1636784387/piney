@@ -99,7 +99,7 @@
 <div class="h-full flex flex-col p-6 space-y-6">
     <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-2xl font-bold tracking-tight">回收站</h2>
+            <h1 class="text-2xl font-bold tracking-tight">回收站</h1>
             <p class="text-muted-foreground">
                 恢复误删的角色卡或永久清理数据。
             </p>

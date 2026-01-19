@@ -108,11 +108,11 @@
     }
 </script>
 
-<div class="container mx-auto py-8 space-y-8 animate-in fade-in duration-500">
+<div class="container mx-auto py-6 space-y-8 animate-in fade-in duration-500">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div class="space-y-1">
-            <h1 class="text-3xl font-bold tracking-tight">全局世界书</h1>
+            <h1 class="text-2xl font-bold tracking-tight">全局世界书</h1>
             <p class="text-muted-foreground">管理和编辑您的全局世界书设定</p>
         </div>
         <div class="flex items-center gap-2">

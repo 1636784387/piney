@@ -1073,12 +1073,15 @@ pub async fn doctor_analyze(
         .unwrap_or("");
 
     // 提取世界书目录
-    let entries = v2_data
+    let entries: Vec<Value> = v2_data
         .get("character_book")
         .and_then(|cb| cb.get("entries"))
         .and_then(|e| e.as_array())
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true)) // Filter enabled
+        .collect();
 
     let worldbook_toc: Vec<String> = entries
         .iter()

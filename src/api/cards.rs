@@ -7,8 +7,8 @@ use axum::{
 use base64::{engine::general_purpose, Engine as _};
 use chrono::TimeZone;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -667,13 +667,44 @@ pub struct CardListItem {
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+#[derive(Debug, FromQueryResult)]
+struct CardListRow {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub author: Option<String>,
+    pub avatar: Option<String>,
+    pub category_id: Option<Uuid>,
+    pub tags: String,
+    pub rating: f64,
+    pub cover_blur: bool,
+    pub version: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+    pub deleted_at: Option<chrono::NaiveDateTime>,
+}
+
 /// GET /api/cards - 获取角色卡列表
 pub async fn list(
     State(db): State<DatabaseConnection>,
     Query(query): Query<ListCardsQuery>,
 ) -> Result<Json<PaginatedResponse>, (StatusCode, String)> {
-    let mut select =
-        character_card::Entity::find().filter(character_card::Column::DeletedAt.is_null());
+    let mut select = character_card::Entity::find()
+        .select_only()
+        .columns([
+            character_card::Column::Id,
+            character_card::Column::Name,
+            character_card::Column::Description,
+            character_card::Column::Author,
+            character_card::Column::Avatar,
+            character_card::Column::CategoryId,
+            character_card::Column::Tags,
+            character_card::Column::Rating,
+            character_card::Column::CoverBlur,
+            character_card::Column::Version,
+            character_card::Column::CreatedAt,
+            character_card::Column::DeletedAt,
+        ])
+        .filter(character_card::Column::DeletedAt.is_null());
 
     // 按分类筛选
     if let Some(cat_id) = query.category_id {
@@ -704,7 +735,7 @@ pub async fn list(
     let page = query.page.unwrap_or(1).max(1);
     let page_size = query.page_size.unwrap_or(20).clamp(1, 100);
 
-    let paginator = select.paginate(&db, page_size);
+    let paginator = select.into_model::<CardListRow>().paginate(&db, page_size);
 
     let total = paginator
         .num_items()

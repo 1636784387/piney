@@ -259,7 +259,7 @@
 
 <div class="container py-6 space-y-6 max-w-3xl mx-auto">
     <div class="space-y-1">
-        <h2 class="text-2xl font-bold tracking-tight">导入数据 (Import)</h2>
+        <h1 class="text-2xl font-bold tracking-tight">导入数据</h1>
         <p class="text-muted-foreground">
             支持 PNG 角色卡、JSON 数据，兼容 SillyTavern v2/v3 标准角色卡。
         </p>

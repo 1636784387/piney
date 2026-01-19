@@ -1,6 +1,7 @@
+use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashSet;
-use tiktoken_rs::cl100k_base;
+use tiktoken_rs::{cl100k_base, CoreBPE};
 use tracing::error;
 
 #[derive(Debug, Default)]
@@ -11,12 +12,19 @@ pub struct TokenCounts {
     pub other: i32,
 }
 
+// Global cached tokenizer (Thread-safe, initialized once)
+static BPE: Lazy<Result<CoreBPE, anyhow::Error>> = Lazy::new(|| {
+    cl100k_base().map_err(|e| anyhow::anyhow!("Failed to load cl100k_base tokenizer: {}", e))
+});
+
 pub fn calculate_card_tokens(json: &Value) -> TokenCounts {
     let mut counts = TokenCounts::default();
-    let bpe = match cl100k_base() {
+
+    // Use the global cached BPE tokenizer
+    let bpe = match BPE.as_ref() {
         Ok(b) => b,
         Err(e) => {
-            error!("Failed to load cl100k_base tokenizer: {}", e);
+            error!("Tokenizer initialization failed: {}", e);
             return counts;
         }
     };
@@ -121,11 +129,11 @@ pub fn calculate_card_tokens(json: &Value) -> TokenCounts {
     }
 
     if let Some(cb) = json.get("character_book") {
-        wb_tokens += collect_wb_recursive(cb, &mut wb_values, &bpe);
+        wb_tokens += collect_wb_recursive(cb, &mut wb_values, bpe);
     }
     if let Some(data) = json.get("data") {
         if let Some(cb) = data.get("character_book") {
-            wb_tokens += collect_wb_recursive(cb, &mut wb_values, &bpe);
+            wb_tokens += collect_wb_recursive(cb, &mut wb_values, bpe);
         }
     }
     counts.wb = wb_tokens as i32;
@@ -178,7 +186,7 @@ pub fn calculate_card_tokens(json: &Value) -> TokenCounts {
         count
     }
 
-    counts.total = collect_all_recursive(json, &mut total_values, &bpe) as i32;
+    counts.total = collect_all_recursive(json, &mut total_values, bpe) as i32;
 
     // 4. Other
     // User formula: Total - Spec - WorldBook
