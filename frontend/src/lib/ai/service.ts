@@ -3,6 +3,9 @@ import { PromptBuilder } from './promptBuilder';
 import { AiFeature, type PromptVariables } from './types';
 
 export class AiService {
+    private static activeRequests = 0;
+    private static readonly MAX_CONCURRENT = 3;
+
     private static async execute(feature: AiFeature, messages: any[], token: string | null) {
         const res = await fetch(`${API_BASE}/api/ai/execute`, {
             method: 'POST',
@@ -138,6 +141,57 @@ export class AiService {
             userPrompt: PromptBuilder.buildUserPrompt(feature, variables),
             variables
         };
+    }
+
+    /**
+     * 通用文本处理（优化/翻译）
+     */
+    static async processText(feature: AiFeature, text: string) {
+        if (this.activeRequests >= this.MAX_CONCURRENT) {
+            throw new Error(`AI 请求队列已满 (${this.activeRequests}/${this.MAX_CONCURRENT})，请稍后再试`);
+        }
+
+        this.activeRequests++;
+        try {
+            // 加载全局配置（如破限）
+            const globalPrompt = await this.getGlobalPrompt();
+
+            const variables = {
+                text,
+                // 补全 PromptVariables 要求的必需字段为空字符串，避免 TS 报错
+                // 因为 PromptBuilder 可能只需要 {{text}}，但也可能校验类型
+                name: "",
+                description: "",
+                personality: "",
+                first_mes: "",
+                creator_notes: ""
+            };
+
+            const userPrompt = PromptBuilder.buildUserPrompt(feature, variables);
+            const systemPrompt = PromptBuilder.getSystemPrompt(feature, globalPrompt);
+
+            const messages = [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ];
+
+            const token = localStorage.getItem("auth_token");
+            const response = await this.execute(feature, messages, token);
+
+            const content = response.choices?.[0]?.message?.content;
+            if (!content) {
+                throw new Error("AI returned empty content");
+            }
+
+            // 清理可能存在的 Markdown 代码块包裹
+            let cleaned = content.trim();
+            if (cleaned.startsWith('```') && cleaned.endsWith('```')) {
+                cleaned = cleaned.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '');
+            }
+            return cleaned;
+        } finally {
+            this.activeRequests--;
+        }
     }
 
     private static prepareVariables(card: any, allSystemTags: string[]): PromptVariables {

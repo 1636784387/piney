@@ -51,6 +51,7 @@
     import VersionHistoryTab from "$lib/components/character/versions/VersionHistoryTab.svelte";
     import DoctorDialog from "$lib/components/character/DoctorDialog.svelte";
     import { doctorTasks } from "$lib/ai/doctor";
+    import { AiFeature } from "$lib/ai/types";
 
     import { API_BASE, resolveUrl } from "$lib/api";
     let cardId = $page.params.id;
@@ -1132,6 +1133,7 @@
                                         class="border-0 bg-transparent shadow-none p-0 focus-visible:ring-0"
                                         isDirty={isDescDirty}
                                         icon={User}
+                                        aiFeature={AiFeature.OPTIMIZE_DESCRIPTION}
                                     />
                                 </div>
                             {/if}
@@ -1186,6 +1188,7 @@
                                         class="border-0 bg-transparent shadow-none p-0 focus-visible:ring-0 font-mono text-sm leading-relaxed"
                                         isDirty={isMesExampleDirty}
                                         icon={ScrollText}
+                                        aiFeature={AiFeature.OPTIMIZE_FIRST_MES}
                                     />
                                 </div>
                             {/if}
@@ -1219,6 +1222,7 @@
                                                 class="border-0 bg-transparent shadow-none p-0 focus-visible:ring-0"
                                                 isDirty={isPersonalityDirty}
                                                 icon={Sparkles}
+                                                aiFeature={AiFeature.OPTIMIZE_DESCRIPTION}
                                             />
                                         </div>
                                     {/if}
@@ -1234,6 +1238,7 @@
                                                 class="border-0 bg-transparent shadow-none p-0 focus-visible:ring-0"
                                                 isDirty={isScenarioDirty}
                                                 icon={Map}
+                                                aiFeature={AiFeature.OPTIMIZE_SCENARIO}
                                             />
                                         </div>
                                     {/if}

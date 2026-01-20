@@ -17,6 +17,7 @@
     import { renderContent } from "$lib/utils/textRenderer";
     import HTMLRender from "$lib/components/render/HTMLRender.svelte";
     import * as Dialog from "$lib/components/ui/dialog";
+    import { AiFeature } from "$lib/ai/types";
 
     let {
         firstMes = $bindable(),
@@ -192,6 +193,7 @@
             rows={5}
             class="animate-in fade-in slide-in-from-right-2 duration-300"
             bind:isZenMode
+            aiFeature={AiFeature.OPTIMIZE_FIRST_MES}
         />
     {:else if alternateGreetings && alternateGreetings[currentIndex - 1] !== undefined}
         <RichTextarea
@@ -200,6 +202,7 @@
             rows={5}
             class="animate-in fade-in slide-in-from-right-2 duration-300"
             bind:isZenMode
+            aiFeature={AiFeature.OPTIMIZE_FIRST_MES}
         />
     {/if}
 </div>

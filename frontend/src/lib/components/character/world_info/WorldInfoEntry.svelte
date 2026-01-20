@@ -27,6 +27,7 @@
     import { slide } from "svelte/transition";
     import { untrack } from "svelte";
     import RichTextarea from "$lib/components/character/RichTextarea.svelte";
+    import { AiFeature } from "$lib/ai/types";
 
     let {
         entry,
@@ -805,6 +806,7 @@
                         rows={8}
                         isDirty={isContentDirty}
                         class="font-mono text-sm leading-relaxed"
+                        aiFeature={AiFeature.OPTIMIZE_WORLDBOOK}
                     />
                 </div>
 

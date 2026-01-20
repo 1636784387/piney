@@ -22,6 +22,8 @@
     import CodeEditor from "./CodeEditor.svelte";
     import HTMLRender from "$lib/components/render/HTMLRender.svelte";
     import { renderContent } from "$lib/utils/textRenderer";
+    import { AiFeature } from "$lib/ai/types";
+    import TextAiActions from "$lib/components/ai/TextAiActions.svelte";
 
     let {
         value = $bindable(),
@@ -37,7 +39,8 @@
         advancedPreview = false,
         previewProcessor = undefined as ((input: string) => string) | undefined,
         regexDebugInfo = undefined as { regex: string, flags: string, replace: string } | undefined,
-        regexScripts = [] as any[]
+        regexScripts = [] as any[],
+        aiFeature = undefined as AiFeature | undefined
     } = $props();
 
 
@@ -102,23 +105,30 @@
                 {/if}
                 <Label>{label}</Label>
             </div>
-            <Button
-                variant="ghost"
-                size="sm"
-                class="h-5 text-[10px] px-2 text-muted-foreground hover:text-primary"
-                onclick={() => (isZenMode = true)}
-            >
-                <Maximize2 class="mr-1 h-3 w-3" /> 全屏{useCodeEditor ? "代码" : ""}编辑
-            </Button>
+            <div class="flex items-center gap-2">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    class="h-5 text-[10px] px-2 text-muted-foreground hover:text-primary"
+                    onclick={() => (isZenMode = true)}
+                >
+                    <Maximize2 class="mr-1 h-3 w-3" /> 全屏{useCodeEditor ? "代码" : ""}编辑
+                </Button>
+            </div>
         </div>
     {/if}
 
-    <div class="relative">
+    <div class="relative group/textarea">
+        {#if aiFeature}
+            <div class="absolute top-2 right-8 z-20 opacity-100 lg:opacity-0 lg:group-hover/textarea:opacity-100 transition-opacity duration-200">
+                <TextAiActions bind:value feature={aiFeature} />
+            </div>
+        {/if}
         <Textarea
             bind:value
             {placeholder}
             class={cn(
-                "resize-none transition-all duration-300 min-h-[80px]",
+                "resize-none transition-all duration-300 min-h-[80px] pr-12",
                 "bg-background/50 border ring-1 ring-border/50 focus-visible:ring-primary/50",
                 isDirty &&
                     "border-amber-500/50 focus-visible:ring-amber-500/50 bg-amber-500/5"
