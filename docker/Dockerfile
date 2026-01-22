@@ -11,27 +11,26 @@ RUN apt-get update && apt-get install -y \
     libwebp-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制 Cargo 配置 (包括所有工作区成员)
+# 复制 Cargo 配置
 COPY Cargo.toml Cargo.lock ./
-COPY migration/Cargo.toml ./migration/
-COPY src-tauri/Cargo.toml ./src-tauri/
+COPY migration ./migration
+
+# 修改 Cargo.toml 移除 src-tauri 工作区成员 (Docker 不需要构建桌面应用)
+RUN sed -i 's/"src-tauri",//' Cargo.toml
 
 # 创建虚拟的 src 目录以缓存依赖
-RUN mkdir -p src migration/src src-tauri/src && \
+RUN mkdir -p src && \
     echo "fn main() {}" > src/main.rs && \
-    echo "" > src/lib.rs && \
-    echo "" > migration/src/lib.rs && \
-    echo "fn main() {}" > src-tauri/src/main.rs
+    echo "" > src/lib.rs
 
 # 预编译依赖
-RUN cargo build --release && rm -rf src migration/src
+RUN cargo build --release && rm -rf src
 
 # 复制实际源码
 COPY src ./src
-COPY migration ./migration
 
 # 构建应用
-RUN touch src/main.rs src/lib.rs migration/src/lib.rs && \
+RUN touch src/main.rs src/lib.rs && \
     cargo build --release
 
 # Stage 2: 构建 Svelte 前端
