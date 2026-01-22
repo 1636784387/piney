@@ -40,8 +40,8 @@ WORKDIR /app/frontend
 # 复制前端配置
 COPY frontend/package.json frontend/package-lock.json* ./
 
-# 安装依赖
-RUN npm ci
+# 安装依赖 (使用 npm install 而非 npm ci，避免跨平台 lockfile 问题)
+RUN npm install --legacy-peer-deps
 
 # 复制前端源码
 COPY frontend ./
