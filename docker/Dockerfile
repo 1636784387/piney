@@ -1,14 +1,19 @@
 # syntax=docker/dockerfile:1
 
+# ============================================================================
+# 使用 tonistiigi/xx 交叉编译 + Vendored OpenSSL
+# openssl-sys 会自动从源码编译 OpenSSL，避免系统库检测问题
+# ============================================================================
+
 # Stage 0: 引入 xx 跨平台工具
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:master AS xx
 
 # Stage 1: Chef - 基础环境与工具安装
 FROM --platform=$BUILDPLATFORM rust:slim-bookworm AS chef
-# 复制 xx 工具
 COPY --from=xx / /
 WORKDIR /app
-# 安装基础构建工具
+
+# 安装构建工具 (perl/make 是编译 OpenSSL 源码所必需的)
 RUN apt-get update && apt-get install -y \
     clang lld pkg-config git cmake perl make build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -17,70 +22,59 @@ RUN cargo install cargo-chef
 # Stage 2: Planner - 计算依赖配方
 FROM chef AS planner
 COPY . .
-# 移除 cargo-chef 无法处理的 workspace members (如 src-tauri，Docker 不需要构建它)
 RUN sed -i 's/"src-tauri",//' Cargo.toml
 RUN cargo chef prepare --recipe-path recipe.json
 
-# Stage 3: Builder - 交叉编译依赖与应用
+# Stage 3: Builder - 交叉编译
 FROM chef AS builder
-# 引入目标平台参数 (如 linux/arm64)
 ARG TARGETPLATFORM
 
-# 复制交叉编译辅助脚本
-COPY docker/cross-cargo.sh /usr/local/bin/cross-cargo
-RUN chmod +x /usr/local/bin/cross-cargo
-
-# 安装目标架构的系统依赖 (libwebp, openssl 等)
-# xx-apt-get 会自动根据 TARGETPLATFORM 安装对应的架构包
+# 安装目标架构的基础依赖 (不需要 libssl-dev，OpenSSL 将从源码编译)
 RUN xx-apt-get update && xx-apt-get install -y \
-    libssl-dev libwebp-dev gcc libc6-dev \
+    libwebp-dev gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# 关键：不设置 OPENSSL_NO_VENDOR，让 openssl-sys 自己编译 OpenSSL
+# 这会增加首次构建时间，但避免了所有交叉编译库检测问题
+ENV PKG_CONFIG_ALLOW_CROSS=1
 
 COPY --from=planner /app/recipe.json recipe.json
 
-# 构建依赖层
-# 使用 cross-cargo 包装器确保环境变量正确传递给 cargo 子进程
+# 构建依赖层 (OpenSSL 会在这里从源码编译)
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
-    cross-cargo chef cook --release --recipe-path recipe.json
+    xx-cargo chef cook --release --recipe-path recipe.json
 
 # 构建应用层
 COPY . .
 RUN sed -i 's/"src-tauri",//' Cargo.toml
 
-# 执行交叉编译
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
-    cross-cargo build --release && \
-    XX_TRIPLE=$(xx-info triple) && \
-    cp target/${XX_TRIPLE}/release/piney-server /app/piney-server && \
+    xx-cargo build --release && \
+    cp target/$(xx-cargo --print-target-triple)/release/piney-server /app/piney-server && \
     xx-verify /app/piney-server
 
-# Stage 4: Frontend - 构建前端 (始终在构建平台运行，速度最快)
+# Stage 4: Frontend
 FROM --platform=$BUILDPLATFORM node:20-slim AS frontend-builder
 WORKDIR /app/frontend
-# 单独复制依赖定义文件以利用缓存
 COPY frontend/package.json frontend/package-lock.json ./
-# 使用 npm ci 进行纯净安装 (比 npm install 更快更可靠)
 RUN npm ci
-# 复制源码并构建
 COPY frontend ./
 RUN npx svelte-kit sync
 RUN npm run build
 
-# Stage 5: Runtime - 最终运行时环境
+# Stage 5: Runtime
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-# 安装运行时依赖 (原生架构)
+# 运行时只需要基础库 (OpenSSL 已静态链接到二进制文件中)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libwebp7 \
-    libssl3 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制产物
 COPY --from=builder /app/piney-server /app/piney
 COPY --from=frontend-builder /app/frontend/build /app/static
 RUN mkdir -p /app/data
