@@ -1,21 +1,17 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================================
-# 使用 tonistiigi/xx 交叉编译 + Vendored OpenSSL
-# openssl-sys 会自动从源码编译 OpenSSL，避免系统库检测问题
+# 极简 Dockerfile - 移除所有交叉编译工具，使用纯 QEMU 原生构建
 # ============================================================================
 
-# Stage 0: 引入 xx 跨平台工具
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:master AS xx
-
 # Stage 1: Chef - 基础环境与工具安装
-FROM --platform=$BUILDPLATFORM rust:slim-bookworm AS chef
-COPY --from=xx / /
+FROM rust:slim-bookworm AS chef
 WORKDIR /app
 
-# 安装构建工具 (perl/make 是编译 OpenSSL 源码所必需的)
+# 安装构建工具
 RUN apt-get update && apt-get install -y \
-    clang lld pkg-config git cmake perl make build-essential \
+    pkg-config git cmake perl make build-essential \
+    libssl-dev libwebp-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef
 
@@ -25,25 +21,15 @@ COPY . .
 RUN sed -i 's/"src-tauri",//' Cargo.toml
 RUN cargo chef prepare --recipe-path recipe.json
 
-# Stage 3: Builder - 交叉编译
+# Stage 3: Builder - 编译
 FROM chef AS builder
-ARG TARGETPLATFORM
-
-# 安装目标架构的基础依赖 (不需要 libssl-dev，OpenSSL 将从源码编译)
-RUN xx-apt-get update && xx-apt-get install -y \
-    libwebp-dev gcc libc6-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# 关键：不设置 OPENSSL_NO_VENDOR，让 openssl-sys 自己编译 OpenSSL
-# 这会增加首次构建时间，但避免了所有交叉编译库检测问题
-ENV PKG_CONFIG_ALLOW_CROSS=1
 
 COPY --from=planner /app/recipe.json recipe.json
 
-# 构建依赖层 (OpenSSL 会在这里从源码编译)
+# 构建依赖层
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
-    xx-cargo chef cook --release --recipe-path recipe.json
+    cargo chef cook --release --recipe-path recipe.json
 
 # 构建应用层
 COPY . .
@@ -51,12 +37,10 @@ RUN sed -i 's/"src-tauri",//' Cargo.toml
 
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
-    xx-cargo build --release && \
-    cp target/$(xx-cargo --print-target-triple)/release/piney-server /app/piney-server && \
-    xx-verify /app/piney-server
+    cargo build --release
 
 # Stage 4: Frontend
-FROM --platform=$BUILDPLATFORM node:20-slim AS frontend-builder
+FROM node:20-slim AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -68,14 +52,14 @@ RUN npm run build
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-# 运行时只需要基础库 (OpenSSL 已静态链接到二进制文件中)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libwebp7 \
+    libssl3 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/piney-server /app/piney
+COPY --from=builder /app/target/release/piney-server /app/piney
 COPY --from=frontend-builder /app/frontend/build /app/static
 RUN mkdir -p /app/data
 
