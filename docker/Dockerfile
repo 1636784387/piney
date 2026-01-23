@@ -26,50 +26,34 @@ FROM chef AS builder
 # 引入目标平台参数 (如 linux/arm64)
 ARG TARGETPLATFORM
 
+# 复制交叉编译辅助脚本
+COPY docker/cross-cargo.sh /usr/local/bin/cross-cargo
+RUN chmod +x /usr/local/bin/cross-cargo
+
 # 安装目标架构的系统依赖 (libwebp, openssl 等)
 # xx-apt-get 会自动根据 TARGETPLATFORM 安装对应的架构包
 RUN xx-apt-get update && xx-apt-get install -y \
     libssl-dev libwebp-dev gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 配置交叉编译环境变量
-# OPENSSL_NO_VENDOR=1: 强制使用系统库，禁止自己编译 OpenSSL
-# PKG_CONFIG_ALLOW_CROSS=1: 允许 pkg-config 在交叉编译时工作
-# 注意：PKG_CONFIG_PATH 和 OPENSSL_DIR 需要在 RUN 时动态设置，因为它们依赖于 xx-info 的输出
-ENV OPENSSL_NO_VENDOR=1 \
-    PKG_CONFIG_ALLOW_CROSS=1 \
-    OPENSSL_STATIC=0
-
 COPY --from=planner /app/recipe.json recipe.json
 
 # 构建依赖层
-# 使用 xx-clang 作为 C 编译器包装器，确保正确的 sysroot 和目标架构
-# 显式设置 OPENSSL_DIR 和 PKG_CONFIG_SYSROOT_DIR 以便找到交叉编译的库
+# 使用 cross-cargo 包装器确保环境变量正确传递给 cargo 子进程
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
-    XX_TRIPLE=$(xx-info triple) && \
-    export PKG_CONFIG_PATH="/usr/lib/${XX_TRIPLE}/pkgconfig" && \
-    export PKG_CONFIG_SYSROOT_DIR="$(xx-info sysroot)" && \
-    export OPENSSL_DIR="/usr" && \
-    export OPENSSL_LIB_DIR="/usr/lib/${XX_TRIPLE}" && \
-    export OPENSSL_INCLUDE_DIR="/usr/include" && \
-    xx-cargo chef cook --release --recipe-path recipe.json
+    cross-cargo chef cook --release --recipe-path recipe.json
 
 # 构建应用层
 COPY . .
 RUN sed -i 's/"src-tauri",//' Cargo.toml
 
-# 执行交叉编译 (使用相同的环境变量设置)
+# 执行交叉编译
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
+    cross-cargo build --release && \
     XX_TRIPLE=$(xx-info triple) && \
-    export PKG_CONFIG_PATH="/usr/lib/${XX_TRIPLE}/pkgconfig" && \
-    export PKG_CONFIG_SYSROOT_DIR="$(xx-info sysroot)" && \
-    export OPENSSL_DIR="/usr" && \
-    export OPENSSL_LIB_DIR="/usr/lib/${XX_TRIPLE}" && \
-    export OPENSSL_INCLUDE_DIR="/usr/include" && \
-    xx-cargo build --release && \
-    cp target/$(xx-cargo --print-target-triple)/release/piney-server /app/piney-server && \
+    cp target/${XX_TRIPLE}/release/piney-server /app/piney-server && \
     xx-verify /app/piney-server
 
 # Stage 4: Frontend - 构建前端 (始终在构建平台运行，速度最快)
