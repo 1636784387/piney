@@ -1,11 +1,16 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================================
-# 极简 Dockerfile - 移除所有交叉编译工具，使用纯 QEMU 原生构建
+# 极简 Dockerfile - 使用原生架构构建，GitHub Actions 原生 ARM64 Runner
 # ============================================================================
+
+# Stage 0: 从官方镜像获取预编译的 cargo-chef (节省 3-5 分钟编译时间)
+FROM lukemathwalker/cargo-chef:latest-rust-slim-bookworm AS cargo-chef
 
 # Stage 1: Chef - 基础环境与工具安装
 FROM rust:slim-bookworm AS chef
+# 复制预编译的 cargo-chef 二进制文件
+COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
 WORKDIR /app
 
 # 安装构建工具
@@ -13,7 +18,6 @@ RUN apt-get update && apt-get install -y \
     pkg-config git cmake perl make build-essential \
     libssl-dev libwebp-dev \
     && rm -rf /var/lib/apt/lists/*
-RUN cargo install cargo-chef
 
 # Stage 2: Planner - 计算依赖配方
 FROM chef AS planner
