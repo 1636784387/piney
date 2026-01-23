@@ -23,9 +23,14 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 # 引入目标平台参数 (如 linux/arm64)
 ARG TARGETPLATFORM
+# 允许 sys crate (如 openssl-sys) 调用 pkg-config 进行跨平台编译
+# OPENSSL_NO_VENDOR=1 强制使用系统库，避免交叉编译时尝试自己构建 OpenSSL
+ENV PKG_CONFIG_ALLOW_CROSS=1 \
+    OPENSSL_NO_VENDOR=1
+
 # 安装目标架构的系统依赖 (libwebp, openssl 等)
 # xx-apt-get 会自动根据 TARGETPLATFORM 安装对应的架构包
-RUN xx-apt-get install -y libssl-dev libwebp-dev gcc libc6-dev
+RUN xx-apt-get install -y libssl-dev libwebp-dev gcc libc6-dev pkg-config
 
 COPY --from=planner /app/recipe.json recipe.json
 # 构建依赖层 (如果 Cargo.toml/lock 未变，此层将使用缓存)
