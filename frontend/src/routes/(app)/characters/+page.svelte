@@ -910,7 +910,7 @@
                     </div>
 
                     <!-- 分类列表 -->
-                    <div class="space-y-2 max-h-60 overflow-y-auto">
+                    <div class="space-y-2 max-h-60 overflow-y-auto" role="list">
                         {#each categories as category (category.id)}
                             <div
                                 class="relative flex items-center gap-2 p-2 rounded-lg border transition-colors bg-background group"
@@ -918,6 +918,7 @@
                                     category.id}
                                 class:opacity-50={draggedCategoryId === category.id}
                                 draggable="true"
+                                role="listitem"
                                 ondragstart={() => handleDragStart(category.id)}
                                 ondragover={(e) => handleDragOver(e, category.id)}
                                 ondrop={() => handleDrop(category.id)}
@@ -1086,7 +1087,7 @@
                             onlongpress={(e) => {
                                 const original = e.detail.originalEvent;
                                 const touch = original.touches?.[0] || original;
-                                e.target.dispatchEvent(
+                                e.target?.dispatchEvent(
                                     new MouseEvent("contextmenu", {
                                         bubbles: true,
                                         cancelable: true,

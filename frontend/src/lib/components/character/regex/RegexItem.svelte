@@ -37,7 +37,6 @@
         onDelete: () => void,
         isOpen?: boolean,
         isDirty?: boolean,
-        isDirty?: boolean,
         lastSaved?: number
     }>();
 
@@ -211,6 +210,9 @@
             "sticky top-0 z-10 flex items-center gap-3 p-3 cursor-pointer select-none transition-colors",
             isOpen ? "bg-primary/5 rounded-t-xl" : "bg-transparent group-hover:!bg-accent/40 rounded-xl"
         )}
+        role="button"
+        tabindex="0"
+        onkeydown={(e) => (e.key === "Enter" || e.key === " ") && (isOpen = !isOpen)}
         onclick={() => isOpen = !isOpen}
     >
         <!-- Drag Handle (Visual only here, actual drag logic in parent) -->
@@ -219,7 +221,7 @@
         </div>
 
         <!-- Enable Switch (Left) -->
-        <div class="flex items-center gap-2" onclick={(e) => e.stopPropagation()}>
+        <div class="flex items-center gap-2" role="none" onkeydown={(e) => e.stopPropagation()} onclick={(e) => e.stopPropagation()}>
              <Switch 
                 checked={!localDisabled} 
                 onCheckedChange={(v) => localDisabled = !v}
@@ -249,6 +251,8 @@
              <!-- Mode Switch (Segmented) -->
              <div 
                 class="flex items-center bg-secondary/50 rounded-lg p-0.5 border border-border/50 h-7 mr-2"
+                role="none"
+                onkeydown={(e) => e.stopPropagation()}
                 onclick={(e) => e.stopPropagation()}
              >
                  <button 

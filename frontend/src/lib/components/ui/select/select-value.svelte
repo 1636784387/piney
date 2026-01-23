@@ -1,19 +1,33 @@
 <script lang="ts">
-    import { Select as SelectPrimitive } from "bits-ui";
     import { cn } from "$lib/utils.js";
+    import type { Snippet } from "svelte";
+    import type { HTMLAttributes } from "svelte/elements";
+
+    interface Props extends HTMLAttributes<HTMLSpanElement> {
+        placeholder?: string;
+        children?: Snippet;
+        ref?: HTMLSpanElement | null;
+        class?: string;
+    }
 
     let {
         ref = $bindable(null),
         class: className,
         placeholder,
+        children,
         ...restProps
-    }: SelectPrimitive.ValueProps = $props();
+    }: Props = $props();
 </script>
 
-<SelectPrimitive.Value
-    bind:ref
+<span
+    bind:this={ref}
     class={cn("data-[placeholder]:text-muted-foreground", className)}
     data-slot="select-value"
-    {placeholder}
     {...restProps}
-/>
+>
+    {#if children}
+        {@render children()}
+    {:else if placeholder}
+        <span data-placeholder>{placeholder}</span>
+    {/if}
+</span>

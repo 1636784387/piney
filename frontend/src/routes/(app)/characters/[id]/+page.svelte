@@ -58,7 +58,7 @@
 
     import { API_BASE, resolveUrl } from "$lib/api";
     import { cardCache } from "$lib/stores/cardCache";
-    let cardId = $page.params.id;
+    let cardId = $page.params.id as string;
     let card: any = null;
     let loading = true;
     let activeTab = $page.url.searchParams.get("tab") || "overview";
@@ -1664,14 +1664,16 @@
     label,
     value,
     compact = false,
+    color,
 }: {
     label: string;
     value: string | number;
     compact?: boolean;
+    color?: string;
 })}
     <div class={cn("rounded-lg border bg-card", compact ? "p-3" : "p-4")}>
         <div class="text-[10px] text-muted-foreground mb-0.5">{label}</div>
-        <div class={cn("font-mono font-bold", compact ? "text-sm" : "text-xl")}>
+        <div class={cn("font-mono font-bold", compact ? "text-sm" : "text-xl", color)}>
             {value}
         
     <!-- Cropper Dialog -->

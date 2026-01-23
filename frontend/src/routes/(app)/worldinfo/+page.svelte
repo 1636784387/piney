@@ -36,8 +36,10 @@
                 page_size: pageSize.toString(),
             });
 
+            const queryHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
             const res = await fetch(`${API_BASE}/api/world_info?${params}`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                headers: queryHeaders,
             });
             if (!res.ok) throw new Error("加载世界书失败");
             const data = await res.json();
@@ -90,7 +92,7 @@
         deleteDialogOpen = false;
         try {
             const token = localStorage.getItem("auth_token");
-            const headers = token ? { Authorization: `Bearer ${token}` } : {};
+            const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
             const idsToDelete = itemToDelete
                 ? [itemToDelete]
@@ -155,22 +157,31 @@
             {#each items as item (item.id)}
                 <ContextMenu.Root>
                     <ContextMenu.Trigger>
-                        <div
-                            class={cn(
-                                "group relative rounded-xl border bg-card text-card-foreground shadow-sm transition-all hover:!bg-accent/40 hover:shadow-md cursor-pointer",
-                                isSelectionMode &&
-                                    selectedItemIds.has(item.id) &&
-                                    "bg-primary/5 ring-2 ring-primary",
-                            )}
-                            onclick={() =>
-                                isSelectionMode
-                                    ? toggleSelection(item.id)
-                                    : goto(`/worldinfo/${item.id}`)}
-                            use:longpress
-                            onlongpress={(e) => {
+                            <div
+                                class={cn(
+                                    "group relative rounded-xl border bg-card text-card-foreground shadow-sm transition-all hover:!bg-accent/40 hover:shadow-md cursor-pointer",
+                                    isSelectionMode &&
+                                        selectedItemIds.has(item.id) &&
+                                        "bg-primary/5 ring-2 ring-primary",
+                                )}
+                                role="button"
+                                tabindex="0"
+                                onkeydown={(e) => {
+                                     if(e.key === 'Enter') {
+                                        isSelectionMode
+                                            ? toggleSelection(item.id)
+                                            : goto(`/worldinfo/${item.id}`);
+                                     }
+                                }}
+                                onclick={() =>
+                                    isSelectionMode
+                                        ? toggleSelection(item.id)
+                                        : goto(`/worldinfo/${item.id}`)}
+                                use:longpress
+                                onlongpress={(e) => {
                                 const original = e.detail.originalEvent;
                                 const touch = original.touches?.[0] || original;
-                                e.target.dispatchEvent(
+                                e.target?.dispatchEvent(
                                     new MouseEvent("contextmenu", {
                                         bubbles: true,
                                         cancelable: true,

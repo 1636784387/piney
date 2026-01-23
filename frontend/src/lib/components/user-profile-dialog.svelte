@@ -10,24 +10,23 @@
 
     let { open = $bindable(false), user = { name: "", avatar: "" } } = $props();
 
-    let avatarUrl = $state(user.avatar);
-
+    let avatarUrl = $state("");
+    
     // Account form
     let currentPassword = $state("");
-    let newUsername = $state(user.name);
+    let newUsername = $state("");
     let newPassword = $state("");
     let confirmPassword = $state("");
     let loading = $state(false);
     let fileInput: HTMLInputElement;
 
     $effect(() => {
+        // Sync with props
         if (open) {
-            // Reset form on open
             avatarUrl = user.avatar;
             newUsername = user.name;
             currentPassword = "";
             newPassword = "";
-            confirmPassword = "";
         }
     });
 

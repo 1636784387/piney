@@ -59,7 +59,7 @@
     }
 
     function selectAll() {
-        selectedEntryIds = entries.map(e => String(e.id));
+        selectedEntryIds = entries.map((e: CharacterBookEntry) => String(e.id));
     }
     
     function deselectAll() {
@@ -72,7 +72,7 @@
 
         try {
             // 1. Filter entries
-            const entriesToExport = entries.filter(e => selectedEntryIds.includes(String(e.id)));
+            const entriesToExport = entries.filter((e: CharacterBookEntry) => selectedEntryIds.includes(String(e.id)));
             // Create a temp partial book structure for conversion
             const partialBook = { name: "temp", entries: entriesToExport };
             const globalFormat = convertCharacterBookToGlobal(partialBook);
@@ -101,7 +101,7 @@
                 if (!selectedExistingId) return;
 
                 const token = localStorage.getItem("auth_token");
-                const headers = token ? { Authorization: `Bearer ${token}` } : {};
+                const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
                 // Update existing: Fetch first to merge
                 const getRes = await fetch(`${API_BASE}/api/world_info/${selectedExistingId}`, { headers });

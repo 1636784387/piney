@@ -64,18 +64,20 @@
     <h1 class="text-2xl font-bold">JSONL 转 TXT 工具 (Debug)</h1>
     
     <div class="space-y-4 max-w-md">
-        <label class="block text-sm font-medium">上传 JSONL 文件</label>
-        <input 
-            type="file" 
-            accept=".jsonl,.json" 
-            onchange={handleFileChange}
-            class="block w-full text-sm text-slate-500
-              file:mr-4 file:py-2 file:px-4
-              file:rounded-full file:border-0
-              file:text-sm file:font-semibold
-              file:bg-violet-50 file:text-violet-700
-              hover:file:bg-violet-100"
-        />
+        <label class="block text-sm font-medium">
+            上传 JSONL 文件
+            <input 
+                type="file" 
+                accept=".jsonl,.json" 
+                onchange={handleFileChange}
+                class="block w-full text-sm text-slate-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-full file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-violet-50 file:text-violet-700
+                  hover:file:bg-violet-100 mt-2"
+            />
+        </label>
     </div>
 
     {#if availableTags.length > 0}

@@ -201,6 +201,9 @@
                            <div 
                                 class="group flex items-center justify-between p-4 pl-5 hover:bg-muted/30 transition-all cursor-pointer flex-1" 
                                 onclick={() => goto(`/characters/${card.id}`)}
+                                role="button"
+                                tabindex="0"
+                                onkeydown={(e) => (e.key === "Enter" || e.key === " ") && goto(`/characters/${card.id}`)}
                             >
                                <div class="flex items-center gap-4 min-w-0 flex-1">
                                    <!-- 2:3 Aspect Ratio Thumbnail -->
@@ -243,6 +246,13 @@
                         <div 
                             class="relative w-48 sm:w-56 aspect-[2/3] rounded-xl overflow-hidden shadow-xl cursor-pointer group hover:-translate-y-1 transition-transform duration-300 ring-1 ring-border/50" 
                             onclick={() => goto(`/characters/${stats?.lucky_card?.id}`)}
+                            role="button"
+                            tabindex="0"
+                            onkeydown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    goto(`/characters/${stats?.lucky_card?.id}`);
+                                }
+                            }}
                             style="cursor: url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='%238b5cf6' stroke='white' stroke-width='2'><path d='M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'/></svg>&quot;) 16 16, auto;"
                         >
                              <img src={resolveUrl(stats.lucky_card.avatar)} alt={stats.lucky_card.name} class="w-full h-full object-cover" />

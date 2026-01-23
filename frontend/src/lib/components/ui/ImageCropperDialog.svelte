@@ -57,12 +57,10 @@
             {#if imageSrc}
                 <Cropper
                     image={imageSrc}
-                    {crop}
-                    {zoom}
+                    bind:crop
+                    bind:zoom
                     {aspect}
                     oncropcomplete={onCropComplete}
-                    oncropchange={(e) => (crop = e)}
-                    onzoomchange={(e) => (zoom = e)}
                 />
             {/if}
         </div>

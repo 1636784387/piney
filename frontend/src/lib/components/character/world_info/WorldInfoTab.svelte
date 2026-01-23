@@ -617,7 +617,7 @@
                         bind:isOpen={openEntries[entry.id || entry.uid]}
                         onDelete={() => deleteEntry(entry.id ?? entry.uid)}
                         {onChange}
-                        onUpdate={(mutator) => {
+                        onUpdate={(mutator: (e: any) => void) => {
                             mutator(entry);
                             if (onChange) onChange();
                         }}

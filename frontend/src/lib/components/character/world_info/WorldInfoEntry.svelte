@@ -209,7 +209,7 @@
     }
 
     function removeKey(idx: number) {
-        localKeys = localKeys.filter((_, i) => i !== idx);
+        localKeys = localKeys.filter((_: string, i: number) => i !== idx);
         if (mode === "global") {
             entry.key = localKeys;
         } else {
@@ -303,6 +303,7 @@
     }
 
     // Initial values
+    // svelte-ignore state_referenced_locally
     let fields = extractFields(entry);
 
     let localEnabled = $state(fields.enabled);
@@ -448,6 +449,7 @@
     }
 
     // --- Dirty Checking Logic ---
+    // svelte-ignore state_referenced_locally
     let originalEntry = $state(JSON.parse(JSON.stringify(entry)));
 
     // Reset snapshot when entry object identity changes or lastSaved updates
@@ -562,6 +564,14 @@
             "sticky top-0 z-10 flex items-center gap-3 p-3 cursor-pointer select-none transition-colors",
             isOpen ? "bg-primary/5 rounded-t-xl" : "bg-card group-hover:bg-accent/40 rounded-xl"
         )}
+        role="button"
+        tabindex="0"
+        onkeydown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                isOpen = !isOpen;
+            }
+        }}
         onclick={() => (isOpen = !isOpen)}
     >
         <!-- Drag Handle -->
@@ -570,7 +580,7 @@
         </div>
 
         <!-- Enable Switch -->
-        <div onclick={(e) => e.stopPropagation()}>
+        <div role="none" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
             <Switch
                 bind:checked={localEnabled}
                 class="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input scale-75 origin-left"

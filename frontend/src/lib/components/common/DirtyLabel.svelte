@@ -18,7 +18,7 @@
         "transition-colors duration-200 inline-flex items-center gap-1.5",
         className,
     )}
-    {...rest}
+    {...(rest as any)}
 >
     {@render children?.()}
     {#if isDirty}

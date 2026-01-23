@@ -82,7 +82,7 @@
             });
             if (res.success && res.data) {
                 testResult = "success";
-                latencyMs = res.data.latency_ms || null;
+                latencyMs = (res.data as any).latency_ms || null;
                 const latencyText = latencyMs ? ` (${latencyMs}ms)` : "";
                 toast.success(`连接测试成功${latencyText}`);
             } else {

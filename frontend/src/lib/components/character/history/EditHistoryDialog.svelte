@@ -14,6 +14,7 @@
     let { open = $bindable(false), history, cardId, onUpdate } = $props();
 
     // Strip extension for display
+    // svelte-ignore state_referenced_locally
     let name = $state(history.display_name.replace(/\.(txt|jsonl)$/i, ''));
     let isProcessing = $state(false);
     let step: 'main' | 'tags' | 'regex' = $state('main');

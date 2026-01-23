@@ -22,7 +22,7 @@
             className,
             isDirty && dirtyStyles,
         )}
-        {...rest}
+        {...(rest as any)}
     />
 
     {#if isDirty}

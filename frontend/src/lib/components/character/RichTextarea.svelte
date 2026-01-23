@@ -45,7 +45,7 @@
     } = $props();
 
 
-    let zenTextarea: HTMLTextAreaElement;
+    let zenTextarea = $state<HTMLTextAreaElement>();
 
     let isPreviewMode = $state(false);
     let isAdvancedPreviewMode = $state(false);
@@ -138,7 +138,7 @@
                     "border-amber-500/50 focus-visible:ring-amber-500/50 bg-amber-500/5"
             )}
             {rows}
-        />
+        ></Textarea>
     </div>
 </div>
 
@@ -170,7 +170,7 @@
                         bind:value
                         class="flex w-full h-full border-none bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 resize-none font-mono text-base leading-relaxed p-6"
                         placeholder={placeholder || "输入内容..."}
-                    />
+                    ></textarea>
                 {/if}
             </div>
             {#if isPreviewMode && isAdvancedPreviewMode}
@@ -180,7 +180,7 @@
                         bind:value={testInput}
                         class="flex-1 w-full rounded-md border-2 border-blue-500/50 focus:border-blue-500 bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 font-mono"
                         placeholder="在此输入原始文本进行测试..."
-                    />
+                    ></textarea>
                 </div>
             {/if}
         </div>

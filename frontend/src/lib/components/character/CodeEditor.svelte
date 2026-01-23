@@ -37,6 +37,7 @@
         language?: "html" | "css" | "javascript";
         placeholder?: string;
         lastSaved?: number;
+        class?: string;
         toolbarActions?: any;
     }>();
 
@@ -47,7 +48,7 @@
     // Search State
     let isSearchOpen = $state(false);
     let searchQuery = $state("");
-    let searchInput: HTMLInputElement;
+    let searchInput = $state<HTMLInputElement>();
 
     const languages = {
         html: html(),
@@ -64,7 +65,7 @@
     function formatCode() {
         if (!view) return;
         const currentCode = view.state.doc.toString();
-        const formatter = beautifiers[language] || beautifiers.html;
+        const formatter = beautifiers[language as keyof typeof beautifiers] || beautifiers.html;
         
         try {
             const formatted = formatter(currentCode, {
@@ -153,10 +154,12 @@
     });
 
     function updateLanguage(newLang: string) {
-        language = newLang as any;
-        view.dispatch({
-            effects: langCompartment.reconfigure(languages[language])
-        });
+        if (newLang in languages) {
+            language = newLang as keyof typeof languages;
+            view.dispatch({
+                effects: langCompartment.reconfigure(languages[language as keyof typeof languages])
+            });
+        }
     }
 
     $effect(() => {
@@ -202,7 +205,7 @@
                     // But we want to redirect Ctrl+F to OUR UI?
                     // For now, let's keep searchKeymap but maybe we should override Ctrl+F
                 ]),
-                langCompartment.of(languages[language]),
+                langCompartment.of(languages[language as keyof typeof languages]),
                 oneDark, 
                 cmPlaceholder(placeholderText),
                 EditorView.updateListener.of((update) => {

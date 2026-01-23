@@ -612,7 +612,7 @@
                             </div>
                         {/if}
 
-                        <div class="grid gap-2"><Label>文字亮度 (深色模式)</Label><div class="flex items-center gap-4"><Slider value={[textBrightness]} max={100} step={5} onValueChange={handleBrightnessChange} class="flex-1"/><span class="w-8 text-sm text-right">{textBrightness}%</span></div></div>
+                        <div class="grid gap-2"><Label>文字亮度 (深色模式)</Label><div class="flex items-center gap-4"><Slider value={[textBrightness]} max={100} step={5} onValueChange={handleBrightnessChange} class="flex-1" type="multiple" /><span class="w-8 text-sm text-right">{textBrightness}%</span></div></div>
                     </div>
                 </Popover.Content>
              </Popover.Root>
@@ -620,6 +620,7 @@
     </header>
 
     <!-- Content -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div 
         class="flex-1 overflow-y-auto p-2 md:p-8 bg-muted/10 outline-none touch-pan-y" 
         onscroll={handleScroll}

@@ -344,12 +344,12 @@
                             openScripts[script.id] ? "z-20" : "z-0 hover:!z-50"
                         )}
                     >
+                        <!-- svelte-ignore binding_property_non_reactive -->
                         <RegexItem 
                             bind:script={data.extensions.regex_scripts[realIndex]} 
                             bind:isOpen={openScripts[script.id]}
                             isDirty={dirtyScriptIds.has(script.id)}
                             {lastSaved}
-                            onChange={onChange}
                             onDelete={() => deleteScript(script.id)}
                         />
                     </div>

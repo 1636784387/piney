@@ -16,12 +16,12 @@
         Edit2,
         Zap,
         Settings2,
-        Box,
         BrainCircuit,
         CheckCircle2,
         XCircle,
         Ghost,
         Sparkles,
+        Info,
     } from "lucide-svelte";
     import { Textarea } from "$lib/components/ui/textarea";
     import { api } from "$lib/api";
@@ -185,6 +185,7 @@
             isSavingConfig = false;
         }
     }
+
 </script>
 
 <div class="h-full flex py-6 flex-col gap-6 p-4 sm:p-6">
@@ -195,12 +196,8 @@
         </div>
     </div>
 
-    <Tabs value="general" class="w-full p4">
+    <Tabs value="ai" class="w-full p4">
         <TabsList class="mb-4 gap-4">
-            <TabsTrigger value="general" class="gap-2">
-                <Settings2 class="h-4 w-4" />
-                通用设置
-            </TabsTrigger>
             <TabsTrigger value="ai" class="gap-2">
                 <Sparkles class="h-4 w-4" />
                 AI 配置
@@ -209,21 +206,22 @@
                 <Ghost class="h-4 w-4" />
                 提示词配置
             </TabsTrigger>
+            <TabsTrigger value="about" class="gap-2">
+                <Info class="h-4 w-4" />
+                关于
+            </TabsTrigger>
         </TabsList>
 
-        <!-- General Tab -->
-        <TabsContent value="general">
+        <!-- About Tab -->
+        <TabsContent value="about">
             <Card.Root>
                 <Card.Header>
-                    <Card.Title>通用设置</Card.Title>
-                    <Card.Description
-                        >系统常规选项（开发中...）</Card.Description
-                    >
+                    <Card.Title>关于 Piney</Card.Title>
                 </Card.Header>
-                <Card.Content
-                    class="min-h-[200px] flex items-center justify-center text-muted-foreground border-dashed"
-                >
-                    更多设置项即将上线
+                <Card.Content>
+                    <div class="text-center text-muted-foreground py-10 border-2 border-dashed rounded-lg">
+                        内容还在想
+                    </div>
                 </Card.Content>
             </Card.Root>
         </TabsContent>
