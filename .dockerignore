@@ -1,0 +1,10 @@
+target
+**/node_modules
+**/.DS_Store
+.git
+.env
+.env.*
+!.env.example
+docker
+frontend/.svelte-kit
+frontend/build

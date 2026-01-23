@@ -1,90 +1,81 @@
-# 多阶段构建 Dockerfile
-# Stage 1: 构建 Rust 后端
-FROM rust:slim-bookworm AS rust-builder
+# syntax=docker/dockerfile:1
 
+# Stage 0: 引入 xx 跨平台工具
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:master AS xx
+
+# Stage 1: Chef - 基础环境与工具安装
+FROM --platform=$BUILDPLATFORM rust:slim-bookworm AS chef
+# 复制 xx 工具
+COPY --from=xx / /
 WORKDIR /app
+# 安装基础构建工具 (clang/lld 用于跨平台链接)
+RUN apt-get update && apt-get install -y clang lld pkg-config git
+RUN cargo install cargo-chef
 
-# 安装构建依赖
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    libwebp-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# 复制 Cargo 配置
-COPY Cargo.toml Cargo.lock ./
-COPY migration ./migration
-
-# 修改 Cargo.toml 移除 src-tauri 工作区成员 (Docker 不需要构建桌面应用)
+# Stage 2: Planner - 计算依赖配方
+FROM chef AS planner
+COPY . .
+# 移除 cargo-chef 无法处理的 workspace members (如 src-tauri，Docker 不需要构建它)
 RUN sed -i 's/"src-tauri",//' Cargo.toml
+RUN cargo chef prepare --recipe-path recipe.json
 
-# 创建虚拟的 src 目录以缓存依赖
-RUN mkdir -p src && \
-    echo "fn main() {}" > src/main.rs && \
-    echo "" > src/lib.rs
+# Stage 3: Builder - 交叉编译依赖与应用
+FROM chef AS builder
+# 引入目标平台参数 (如 linux/arm64)
+ARG TARGETPLATFORM
+# 安装目标架构的系统依赖 (libwebp, openssl 等)
+# xx-apt-get 会自动根据 TARGETPLATFORM 安装对应的架构包
+RUN xx-apt-get install -y libssl-dev libwebp-dev gcc libc6-dev
 
-# 预编译依赖
-RUN cargo build --release && rm -rf src
+COPY --from=planner /app/recipe.json recipe.json
+# 构建依赖层 (如果 Cargo.toml/lock 未变，此层将使用缓存)
+# 使用 xx-cargo 自动处理交叉编译环境变量
+RUN xx-cargo chef cook --release --recipe-path recipe.json
 
-# 复制实际源码
-COPY src ./src
+# 构建应用层
+COPY . .
+RUN sed -i 's/"src-tauri",//' Cargo.toml
+# 执行交叉编译
+RUN xx-cargo build --release && \
+    cp target/$(xx-cargo --print-target-triple)/release/piney-server /app/piney-server && \
+    xx-verify /app/piney-server
 
-# 构建应用
-RUN touch src/main.rs src/lib.rs && \
-    cargo build --release
-
-# Stage 2: 构建 Svelte 前端
-FROM node:20-slim AS frontend-builder
-
+# Stage 4: Frontend - 构建前端 (始终在构建平台/amd64 运行，速度最快，避免 QEMU)
+FROM --platform=$BUILDPLATFORM node:20-slim AS frontend-builder
 WORKDIR /app/frontend
-
-# 只复制 package.json (不复制 package-lock.json，避免跨平台依赖问题)
-COPY frontend/package.json ./
-
-# 安装依赖 (在 Linux 上重新生成 lockfile)
-RUN npm install
-
-# 复制前端源码
+# 单独复制依赖定义文件以利用缓存
+COPY frontend/package.json frontend/package-lock.json ./
+# 使用 npm ci 进行纯净安装 (比 npm install 更快更可靠)
+RUN npm ci
+# 复制源码并构建
 COPY frontend ./
-
-# 构建静态文件
 RUN npm run build
 
-# Stage 3: 运行时镜像
+# Stage 5: Runtime - 最终运行时环境
 FROM debian:bookworm-slim AS runtime
-
 WORKDIR /app
 
-# 安装运行时依赖
+# 安装运行时依赖 (原生架构)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libwebp-dev \
     curl \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制后端二进制文件
-COPY --from=rust-builder /app/target/release/piney-server /app/piney
-
-# 复制前端静态文件
+# 复制产物
+COPY --from=builder /app/piney-server /app/piney
 COPY --from=frontend-builder /app/frontend/build /app/static
-
-# 创建数据目录
 RUN mkdir -p /app/data
 
-# 设置环境变量
-ENV RUN_MODE=server
-ENV PORT=9696
-ENV DATA_DIR=/app/data
+ENV RUN_MODE=server \
+    PORT=9696 \
+    DATA_DIR=/app/data
 
-# 暴露端口
 EXPOSE 9696
-
-# 数据卷
 VOLUME ["/app/data"]
 
-# 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:9696/api/health || exit 1
 
-# 启动命令
 CMD ["/app/piney"]
