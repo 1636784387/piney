@@ -63,7 +63,10 @@ async fn setup(
     Json(payload): Json<SetupRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if config.is_initialized() {
-        return Err((StatusCode::BAD_REQUEST, "Already initialized".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "已经初始化，无法再次注册".to_string(),
+        ));
     }
 
     // Direct plain text password
@@ -101,17 +104,17 @@ async fn login(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let conf = match config.get() {
         Some(c) => c,
-        None => return Err((StatusCode::UNAUTHORIZED, "Not initialized".to_string())),
+        None => return Err((StatusCode::UNAUTHORIZED, "还未进行初始化".to_string())),
     };
 
     // Verify username
     if conf.username != payload.username {
-        return Err((StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()));
+        return Err((StatusCode::UNAUTHORIZED, "用户名或密码错误".to_string()));
     }
 
     // Verify password (plain text)
     if conf.password != payload.password {
-        return Err((StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()));
+        return Err((StatusCode::UNAUTHORIZED, "用户名或密码错误".to_string()));
     }
 
     // Generate Token

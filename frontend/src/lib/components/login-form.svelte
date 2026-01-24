@@ -77,6 +77,7 @@
 						<Input
 							id="password-{id}"
 							type="password"
+							placeholder="请输入密码"
 							bind:value={password}
 							required
 						/>
