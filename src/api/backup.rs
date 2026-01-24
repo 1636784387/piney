@@ -5,7 +5,7 @@
 
 use axum::{
     body::Body,
-    extract::Multipart,
+    extract::{Json, Multipart},
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
 };
@@ -13,8 +13,20 @@ use chrono::Local;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use tar::{Archive, Builder};
+
+#[derive(Serialize)]
+pub struct ImportResponse {
+    username: String,
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct SimpleConfig {
+    username: String,
+}
 
 /// 获取 data 目录路径
 fn get_data_dir() -> std::path::PathBuf {
@@ -145,7 +157,9 @@ pub async fn export_backup() -> Result<impl IntoResponse, (StatusCode, String)> 
 }
 
 /// POST /api/backup/import - 导入 .piney 备份文件并恢复数据
-pub async fn import_backup(mut multipart: Multipart) -> Result<StatusCode, (StatusCode, String)> {
+pub async fn import_backup(
+    mut multipart: Multipart,
+) -> Result<Json<ImportResponse>, (StatusCode, String)> {
     // 1. 读取上传的文件
     let mut file_data: Option<Vec<u8>> = None;
 
@@ -184,22 +198,20 @@ pub async fn import_backup(mut multipart: Multipart) -> Result<StatusCode, (Stat
 
     let data_dir = get_data_dir();
 
-    // 3. 清空 data 目录（除了正在使用的数据库文件，稍后处理）
-    // 注意：这里我们先删除非数据库文件，数据库文件最后处理
+    // 3. 执行清空、解压、读取配置、清理密钥
     let data_clone = data.clone();
     let data_dir_clone = data_dir.clone();
 
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        // 读取目录内容
+    let username = tokio::task::spawn_blocking(move || -> Result<String, String> {
+        // A. 清空 data 目录
         let entries =
             fs::read_dir(&data_dir_clone).map_err(|e| format!("读取数据目录失败: {}", e))?;
 
-        // 删除所有内容（SQLite 文件可能被锁定，我们需要特殊处理）
         for entry in entries.flatten() {
             let path = entry.path();
             let filename = path.file_name().unwrap_or_default().to_string_lossy();
 
-            // 跳过 .DS_Store 之类的系统文件
+            // 跳过 .DS_Store
             if filename.starts_with('.') {
                 continue;
             }
@@ -208,13 +220,11 @@ pub async fn import_backup(mut multipart: Multipart) -> Result<StatusCode, (Stat
                 fs::remove_dir_all(&path)
                     .map_err(|e| format!("删除目录 {} 失败: {}", path.display(), e))?;
             } else {
-                // 对于 SQLite 数据库，尝试删除
-                // 如果失败（被锁定），我们稍后会覆盖它
                 let _ = fs::remove_file(&path);
             }
         }
 
-        // 4. 解压备份到 data 目录
+        // B. 解压备份到 data 目录
         let decoder = GzDecoder::new(&data_clone[..]);
         let mut archive = Archive::new(decoder);
 
@@ -222,7 +232,26 @@ pub async fn import_backup(mut multipart: Multipart) -> Result<StatusCode, (Stat
             .unpack(&data_dir_clone)
             .map_err(|e| format!("解压失败: {}", e))?;
 
-        Ok(())
+        // C. 读取恢复后的 config.yml 中的用户名
+        let config_path = data_dir_clone.join("config.yml");
+        let mut username = "admin".to_string(); // 默认值
+
+        if config_path.exists() {
+            if let Ok(content) = fs::read_to_string(&config_path) {
+                // 简单解析 yaml
+                if let Ok(cfg) = serde_yaml::from_str::<SimpleConfig>(&content) {
+                    username = cfg.username;
+                }
+            }
+        }
+
+        // D. 强制清理 .jwt_secret (确保用户退出登录)
+        let secret_path = data_dir_clone.join(".jwt_secret");
+        if secret_path.exists() {
+            let _ = fs::remove_file(secret_path);
+        }
+
+        Ok(username)
     })
     .await
     .map_err(|e| {
@@ -233,8 +262,9 @@ pub async fn import_backup(mut multipart: Multipart) -> Result<StatusCode, (Stat
     })?
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    // 5. 返回成功
-    // 注意：数据库连接可能需要重启服务才能生效
-    // 这里我们返回成功，前端应提示用户刷新页面或重启服务
-    Ok(StatusCode::OK)
+    // 5. 返回成功信息
+    Ok(Json(ImportResponse {
+        username,
+        message: "数据恢复成功".to_string(),
+    }))
 }

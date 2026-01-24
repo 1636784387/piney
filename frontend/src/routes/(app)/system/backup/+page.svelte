@@ -85,6 +85,15 @@
 
     let isRestoring = false;
 
+    // --- Post Restore ---
+    let showPostRestoreDialog = false;
+    let restoredUsername = "";
+    
+    function handleLogoutAndRestart() {
+        localStorage.removeItem("auth_token");
+        window.location.href = "/login";
+    }
+
     async function handleRestoreConfirm() {
         if (!selectedFile || isRestoring) return;
         
@@ -106,7 +115,11 @@
             toast.dismiss(loadingToast);
             
             if (res.ok) {
-                toast.success("数据恢复成功！请重启服务以确保数据生效");
+                // Parse response to get username
+                const data = await res.json();
+                restoredUsername = data.username || "未知用户";
+                showPostRestoreDialog = true;
+                
                 selectedFile = null;
                 if (fileInput) fileInput.value = "";
             } else {
@@ -264,6 +277,35 @@
                 <AlertDialog.Action onclick={handleRestoreConfirm} class="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                     确认恢复
                 </AlertDialog.Action>
+            </AlertDialog.Footer>
+        </AlertDialog.Content>
+    </AlertDialog.Root>
+
+    <!-- Success Dialog -->
+    <AlertDialog.Root open={showPostRestoreDialog}>
+        <AlertDialog.Content>
+            <AlertDialog.Header>
+                <AlertDialog.Title class="flex items-center gap-2 text-green-600">
+                    <DatabaseBackup class="h-5 w-5" />
+                    数据恢复成功
+                </AlertDialog.Title>
+                <AlertDialog.Description class="space-y-4 pt-2 text-base">
+                    <p>
+                        您的数据已成功导入。
+                    </p>
+                    <div class="bg-muted p-4 rounded-md border text-sm !text-left">
+                        <p class="mb-2 font-medium">请注意：</p>
+                        <ul class="list-disc ml-4 space-y-1">
+                            <li>您需要使用备份文件中的用户名进行登录：<br/><strong class="text-primary">{restoredUsername}</strong></li>
+                            <li>为了确保数据库连接正常，<strong class="text-destructive">请务必手动重启服务</strong></li>
+                        </ul>
+                    </div>
+                </AlertDialog.Description>
+            </AlertDialog.Header>
+            <AlertDialog.Footer>
+                <Button onclick={handleLogoutAndRestart} variant="destructive" class="w-full">
+                    需要手动重启服务，确定（直接登录不行）
+                </Button>
             </AlertDialog.Footer>
         </AlertDialog.Content>
     </AlertDialog.Root>
