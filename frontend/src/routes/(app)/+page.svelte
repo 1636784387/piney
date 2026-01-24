@@ -120,7 +120,7 @@
                     {#if loading} <span class="animate-pulse bg-muted rounded h-8 w-12 block"></span> {:else} {stats?.total_characters || 0} {/if}
                  </h3>
                  <div class="text-[10px] sm:text-xs text-muted-foreground truncate font-medium">
-                     记录在这个世界的灵魂
+                     镌刻角色的灵魂
                  </div>
             </div>
             <div class="flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 group-hover:scale-110 transition-transform flex-shrink-0 ml-1 sm:ml-2">
@@ -131,7 +131,7 @@
         <!-- Token 消耗 -->
         <div class="group relative overflow-hidden rounded-2xl border bg-card p-4 sm:p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 min-h-[120px] sm:min-h-[160px] flex justify-between">
             <div class="flex flex-col justify-between z-10 w-full overflow-hidden">
-                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">Token 总消耗</p>
+                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">角色卡总 Token</p>
                  <h3 class="text-2xl sm:text-4xl font-bold tracking-tight text-foreground flex items-baseline gap-1 whitespace-nowrap">
                     {#if loading} 
                         <span class="animate-pulse bg-muted rounded h-8 w-12 block"></span> 
@@ -141,7 +141,7 @@
                     {/if}
                  </h3>
                  <div class="text-[10px] sm:text-xs text-muted-foreground truncate font-medium">
-                     编织故事的代价
+                     编织宇宙的代价
                  </div>
             </div>
             <div class="flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform flex-shrink-0 ml-1 sm:ml-2">
@@ -152,7 +152,7 @@
         <!-- 世界书 -->
         <div class="group relative overflow-hidden rounded-2xl border bg-card p-4 sm:p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 min-h-[120px] sm:min-h-[160px] flex justify-between">
             <div class="flex flex-col justify-between z-10 w-full overflow-hidden">
-                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">世界书条目</p>
+                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">全局世界书</p>
                  <h3 class="text-2xl sm:text-4xl font-bold tracking-tight text-foreground flex items-baseline gap-1 whitespace-nowrap">
                     {#if loading} <span class="animate-pulse bg-muted rounded h-8 w-12 block"></span> {:else} {stats?.total_world_info || 0} {/if}
                  </h3>
@@ -168,12 +168,12 @@
         <!-- 数据库容量 -->
         <div class="group relative overflow-hidden rounded-2xl border bg-card p-4 sm:p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 min-h-[120px] sm:min-h-[160px] flex justify-between">
             <div class="flex flex-col justify-between z-10 w-full overflow-hidden">
-                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">知识库容量</p>
+                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">数据库容量</p>
                  <h3 class="text-2xl sm:text-4xl font-bold tracking-tight text-foreground flex items-baseline gap-1 whitespace-nowrap">
                     {#if loading} <span class="animate-pulse bg-muted rounded h-8 w-12 block"></span> {:else} {stats?.db_size_mb || 0} <span class="text-lg sm:text-2xl font-normal text-muted-foreground">MB</span>{/if}
                  </h3>
                  <div class="text-[10px] sm:text-xs text-muted-foreground truncate font-medium">
-                     承载记忆的重量
+                     承载一切的重量
                  </div>
             </div>
             <div class="flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform flex-shrink-0 ml-1 sm:ml-2">
@@ -233,7 +233,7 @@
 
         <!-- Daily Lucky (Right) -->
         <div class="lg:col-span-2 flex flex-col h-full">
-             <h2 class="text-xl font-bold tracking-tight mb-4">今日幸运星</h2>
+             <h2 class="text-xl font-bold tracking-tight mb-4">今日幸运 Star</h2>
              
              <div class="rounded-2xl border bg-card shadow-sm p-6 h-full flex flex-col justify-between relative overflow-hidden">
                  <!-- Background decoration -->

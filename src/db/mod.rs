@@ -37,6 +37,27 @@ pub async fn init_database() -> anyhow::Result<DatabaseConnection> {
     // 连接数据库
     let db = Database::connect(&db_url).await?;
 
+    // 开启 WAL 模式以提高并发性能，并设置 busy_timeout 防止锁竞争导致 500
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    db.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "PRAGMA journal_mode=WAL;".to_owned(),
+    ))
+    .await?;
+
+    db.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "PRAGMA busy_timeout=5000;".to_owned(),
+    ))
+    .await?;
+
+    db.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "PRAGMA foreign_keys = ON;".to_owned(),
+    ))
+    .await?;
+
     // 运行迁移
     info!("检查数据库迁移...");
     migration::Migrator::up(&db, None).await?;
