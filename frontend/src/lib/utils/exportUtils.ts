@@ -13,7 +13,7 @@ export interface ChatMessage {
  */
 export function scanTags(fileContent: string): string[] {
     const tagCounts = new Map<string, number>();
-    const regex = /<([a-zA-Z0-9_\-\.]+)(?:\s[^>]*)?>[\s\S]*?<\/\1>/g;
+    const regex = /<([\p{L}0-9_\-\.]+)(?:\s[^>]*)?>[\s\S]*?<\/\1>/gu;
 
     const lines = fileContent.trim().split('\n');
     for (let i = 1; i < lines.length; i++) {

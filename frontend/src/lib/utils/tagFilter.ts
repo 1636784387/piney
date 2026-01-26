@@ -4,26 +4,33 @@
  * Ported from SillyReader (sillyreaderfixpro.html)
  */
 
+
+/**
+ * Smart Tag Filtering Logic
+ * Ported from SillyReader (sillyreaderfixpro.html)
+ */
+
 export function filterTagContent(text: string, tag: string): string {
     const tagLower = tag.toLowerCase();
 
-    // Regex for Open and Close tags
-    const openTagRegex = new RegExp(`<${tagLower}(?:\\s[^>]*)?>`, 'gi');
-    const closeTagRegex = new RegExp(`</${tagLower}>`, 'gi');
+    // Escape special characters in tag for Regex
+    const escapedTag = tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Regex for Open and Close tags with Unicode support
+    // Modified to be more robust
+    const openTagRegex = new RegExp(`<(${escapedTag})(?:\\s[^>]*)?>`, 'gi');
+    const closeTagRegex = new RegExp(`</${escapedTag}>`, 'gi');
 
     // Collect positions
     const openTags: { index: number, end: number, type: 'open' }[] = [];
     const closeTags: { index: number, end: number, type: 'close' }[] = [];
-    let match;
 
-    openTagRegex.lastIndex = 0;
-    while ((match = openTagRegex.exec(text)) !== null) {
-        openTags.push({ index: match.index, end: match.index + match[0].length, type: 'open' });
+    for (const match of text.matchAll(openTagRegex)) {
+        openTags.push({ index: match.index!, end: match.index! + match[0].length, type: 'open' });
     }
 
-    closeTagRegex.lastIndex = 0;
-    while ((match = closeTagRegex.exec(text)) !== null) {
-        closeTags.push({ index: match.index, end: match.index + match[0].length, type: 'close' });
+    for (const match of text.matchAll(closeTagRegex)) {
+        closeTags.push({ index: match.index!, end: match.index! + match[0].length, type: 'close' });
     }
 
     if (openTags.length === 0 && closeTags.length === 0) {
@@ -31,12 +38,11 @@ export function filterTagContent(text: string, tag: string): string {
     }
 
     // Collect ALL tag start positions (to determine where an unclosed tag automatically ends)
-    // Matches any XML-like tag start <TagName ...>
-    const anyTagStartRegex = /<[a-zA-Z][a-zA-Z0-9_-]*(?:\s[^>]*)?>/gi;
+    // Matches any XML-like tag start <TagName ...> including unicode
+    const anyTagStartRegex = /<[\p{L}0-9_\-\.]+(?:\s[^>]*)?>/gu;
     const allTagStartPositions: number[] = [];
-    anyTagStartRegex.lastIndex = 0;
-    while ((match = anyTagStartRegex.exec(text)) !== null) {
-        allTagStartPositions.push(match.index);
+    for (const match of text.matchAll(anyTagStartRegex)) {
+        allTagStartPositions.push(match.index!);
     }
 
     // Sort all target tags by position
@@ -70,22 +76,20 @@ export function filterTagContent(text: string, tag: string): string {
     for (const openTag of openStack) {
         let nextTagPos = text.length; // Default to end of string
 
-        // Find the first tag start position that is AFTER this open tag
-        // AND is not an instance of the SAME tag type (unless nested? SillyReader ignores nesting check here)
-        // SillyReader logic: "!currentTagOpenPositions.has(pos)" 
-        // implies "Next tag that is DIFFERENT from the one we are filtering"?
-        // Wait, if we have <thought> A <thought> B.
-        // openStack has both.
-        // First <thought>: next tag is 2nd <thought>.
-        // SillyReader logic excludes `currentTagOpenPositions` from being a "stopper".
-        // So <thought> ... <thought> ... <other>
-        // Start <thought> deletes until <other>.
-        // This effectively merges them?
-
         for (const pos of allTagStartPositions) {
-            if (pos > openTag.index && !currentTagOpenPositions.has(pos)) {
-                nextTagPos = pos;
-                break;
+            if (pos > openTag.index) {
+                // IMPORTANT: The next tag MUST NOT be a nested instance of the SAME tag we are currently filtering.
+                // If we have <thought> A <thought> B using strict filtering,
+                // The first <thought> should probably eat until the second <thought>?
+                // Or shoud it eat until ANY tag?
+                // SillyReader Logic: It eats until the next tag that is NOT itself (presumably to support nesting or simple fail-safe)
+                // But if we are filtering "thought", and we see another <thought>, 
+                // typically we want to hide everything.
+                // Let's stick to SillyReader logic: Check if pos is in our known start list for THIS tag type.
+                if (!currentTagOpenPositions.has(pos)) {
+                    nextTagPos = pos;
+                    break;
+                }
             }
         }
         removeRanges.push({ start: openTag.index, end: nextTagPos });
@@ -139,6 +143,7 @@ export function smartFilterTags(text: string, tags: string[]): string {
  * 1. Matches VALID PAIRED tags only: <tag>...</tag>
  * 2. Removes Code Blocks (```...```), Inline Code (`...`), and Comments (<!-- ... -->) before scanning.
  * 3. Does NOT use a hardcoded HTML blocklist (consistent with export tool).
+ * 4. Supports Unicode (Chinese) tag names.
  */
 export function detectTags(text: string): Set<string> {
     const tags = new Set<string>();
@@ -149,11 +154,13 @@ export function detectTags(text: string): Set<string> {
     content = content.replace(/`[^`]*`/g, '');
     content = content.replace(/<!--[\s\S]*?-->/g, '');
 
-    // 2. Strict Regex from exportUtils.ts
-    const regex = /<([a-zA-Z0-9_\-\.]+)(?:\s[^>]*)?>[\s\S]*?<\/\1>/g;
+    // 2. Strict Regex from exportUtils.ts (Updated for Unicode)
+    // Matches <tag> ... </tag>
+    // Group 1: Tag Name (Unicode letters, numbers, _, -, .)
+    // Reference \1 ensures close tag matches open tag name
+    const regex = /<([\p{L}0-9_\-\.]+)(?:\s[^>]*)?>[\s\S]*?<\/\1>/gu;
 
-    const matches = content.matchAll(regex);
-    for (const m of matches) {
+    for (const m of content.matchAll(regex)) {
         tags.add(m[1]);
     }
     return tags;
@@ -183,19 +190,46 @@ export function sortTags(tags: string[] | Set<string>): string[] {
  * Preserves other HTML structure.
  */
 export function processTagNewlines(text: string, tags: string[]): string {
-    let res = text;
+    if (!tags.length) return text;
+
+    // 1. Mask Code Blocks to protect them from modification
+    const codeBlocks: string[] = [];
+    let maskedText = text.replace(/```[\s\S]*?```/g, (match) => {
+        codeBlocks.push(match);
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+
+    // 2. Process Tags on the masked text
     for (const tag of tags) {
         const tagLower = tag.toLowerCase();
         // Regex to capture content of <tag>...</tag>
         // Use [\s\S] for dot-all logic
-        const regex = new RegExp(`(<${tagLower}(?:\\s[^>]*)?>)([\\s\\S]*?)(<\/${tagLower}>)`, 'gi');
-        res = res.replace(regex, (match, startTag, content, endTag) => {
+        const escapedTag = tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(<${escapedTag}(?:\\s[^>]*)?>)([\\s\\S]*?)(<\\/${escapedTag}>)`, 'gi');
+
+        maskedText = maskedText.replace(regex, (match, startTag, content, endTag) => {
+            // Check if content contains common HTML block tags that would break if we blindly replace \n with <br>
+            // This is a naive heuristic but effective for "mixed content"
+            // We ignore if "inside code block" but we already masked those.
+            // So we check for unmasked HTML tags.
+            const hasCommonHtml = /<\/?(?:div|p|table|tr|td|th|ul|ol|li|script|style|blockquote|pre|form|input)\b/i.test(content);
+
+            if (hasCommonHtml) {
+                // If it looks like HTML, don't mess with newlines
+                return match;
+            }
+
             // Replace \n with <br> inside content
-            // Note: This replaces newlines in nested tags too, but usually fine for display
             // We use <br> for visual line break
             const processedContent = content.replace(/\n/g, '<br>');
             return `${startTag}${processedContent}${endTag}`;
         });
     }
+
+    // 3. Restore Code Blocks
+    const res = maskedText.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
+        return codeBlocks[parseInt(index)] || match;
+    });
+
     return res;
 }

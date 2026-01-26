@@ -86,8 +86,13 @@
                 // Parse card regex
                 try {
                     // Check structure. Usually card.data.extensions.regex_scripts
+                    // Check structure. Support V1 and V2
                     const data = typeof card.data === 'string' ? JSON.parse(card.data) : card.data;
-                    if (data?.extensions?.regex_scripts) {
+                    const v2Data = data?.data || {}; // V2 structure
+                    
+                    if (v2Data?.extensions?.regex_scripts) {
+                        cardRegex = v2Data.extensions.regex_scripts;
+                    } else if (data?.extensions?.regex_scripts) {
                         cardRegex = data.extensions.regex_scripts;
                     }
                 } catch (e) { console.error("Failed to parse card regex", e); }
@@ -166,6 +171,12 @@
                 currentPage = data.current_page;
                 floors = data.floors;
                 jumpPage = currentPage;
+
+                // Detect tags in loaded content (Using Global Backend Detection)
+                if (!isTxtFormat && (data as any).detected_tags) {
+                     (data as any).detected_tags.forEach((t: string) => availableTags.add(t));
+                     availableTags = new Set(availableTags);
+                }
             } catch (e) {
                 console.error(e);
                 toast.error("加载内容失败");
@@ -178,15 +189,6 @@
 
         // Common post-load logic (from cache or fresh fetch)
         try {
-            // Detect tags in loaded content
-            if (!isTxtFormat) {
-                floors.forEach(f => {
-                    const t = detectTags(f.content);
-                    t.forEach(ti => availableTags.add(ti));
-                });
-                availableTags = new Set(availableTags);
-            }
-
             await tick(); // Wait for DOM update
             
             // Restore scroll position with a slight delay to ensure layout
@@ -231,18 +233,27 @@
                     totalPages: data.total_pages
                 };
                 
-                // Also scan tags for the preloaded page to keep the menu updated
-                if (!isTxtFormat) {
-                    data.floors.forEach((f: any) => {
-                        const t = detectTags(f.content);
-                        t.forEach((ti: string) => availableTags.add(ti));
-                    });
-                    availableTags = new Set(availableTags);
+                // Also scan tags for the preloaded page to keep the menu updated (Global)
+                if (!isTxtFormat && (data as any).detected_tags) {
+                     (data as any).detected_tags.forEach((t: string) => availableTags.add(t));
+                     availableTags = new Set(availableTags);
                 }
             }
         } catch (e) {
             // Silently fail preload
         }
+    }
+    
+    function isTagMaskedByRegex(tag: string): boolean {
+        const patternString = `<${tag}`;
+        const check = (scripts: RegexScript[]) => {
+            return scripts.some(s => {
+                if (!s.regex) return false;
+                // Check if the regex pattern contains the tag (case insensitive)
+                return s.regex.toLowerCase().includes(patternString.toLowerCase());
+            });
+        };
+        return check(chatRegex) || check(cardRegex);
     }
 
     function handlePageChange(newPage: number) {
@@ -355,16 +366,16 @@
             return res;
         }
 
-        // 2. Smart Tag Filtering (Before Regex)
+        // 2. Apply User Regex Scripts (Chat -> Card) - MOVED UP
+        res = processContentWithScripts(res, chatRegex);
+        res = processContentWithScripts(res, cardRegex);
+
+        // 3. Smart Tag Filtering (After Regex)
         // Handles unclosed tags: <thought>... (deletes to next tag), </thought>... (deletes from start)
         res = smartFilterTags(res, filterTags);
         
-        // New: Process Tag Newlines
+        // 4. Process Tag Newlines
         res = processTagNewlines(res, newlineTags);
-
-        // 3. Apply User Regex Scripts (Chat -> Card)
-        res = processContentWithScripts(res, chatRegex);
-        res = processContentWithScripts(res, cardRegex);
         
         // 4. Collapse excessive empty lines (3+ newlines -> 2)
         res = res.replace(/(\n\s*){3,}/g, '\n\n');
@@ -581,7 +592,7 @@
                                 <Label>标签显示</Label>
                                 <p class="text-xs text-muted-foreground">选择的标签内容将会显示</p>
                                 <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                                    {#each sortTags(availableTags) as tag}
+                                    {#each sortTags(availableTags).filter(t => !isTagMaskedByRegex(t)) as tag}
                                         <div class="flex items-center space-x-2">
                                             <Checkbox 
                                                 id={`filter-${tag}`} 
@@ -598,7 +609,7 @@
                                 <Label>标签分行</Label>
                                 <p class="text-xs text-muted-foreground">选择的标签内容将会很好的分行显示，建议content和status必选（若有）</p>
                                 <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                                    {#each sortTags(availableTags) as tag}
+                                    {#each sortTags(availableTags).filter(t => !isTagMaskedByRegex(t)) as tag}
                                         <div class="flex items-center space-x-2">
                                             <Checkbox 
                                                 id={`newline-${tag}`} 

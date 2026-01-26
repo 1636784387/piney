@@ -383,6 +383,7 @@ pub struct PaginatedContent {
     pub total_pages: usize,
     pub current_page: usize,
     pub floors: Vec<ChatMessage>,
+    pub detected_tags: Vec<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -448,6 +449,138 @@ pub async fn get_history_content(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Global Tag Detection
+    // Scan all unique tags from the raw content to support global filtering in UI
+    // Global Tag Detection
+    // Scan all unique tags from the raw content to support global filtering in UI
+    let detected_tags: Vec<String> = {
+        let tag_regex = Regex::new(r"</?([a-zA-Z0-9_\-\.\u4e00-\u9fa5]+)(?:\s[^>]*)?>").unwrap();
+        let mut tags_set = std::collections::HashSet::new();
+        // Expanded Common HTML tags to ignore (Blocklist)
+        let ignore = std::collections::HashSet::from([
+            "html",
+            "head",
+            "body",
+            "script",
+            "style",
+            "div",
+            "p",
+            "span",
+            "br",
+            "hr",
+            "img",
+            "a",
+            "b",
+            "i",
+            "u",
+            "s",
+            "strike",
+            "del",
+            "strong",
+            "em",
+            "code",
+            "pre",
+            "blockquote",
+            "thead",
+            "tbody",
+            "tfoot",
+            "tr",
+            "th",
+            "td",
+            "caption",
+            "ul",
+            "ol",
+            "li",
+            "dl",
+            "dt",
+            "dd",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "form",
+            "input",
+            "button",
+            "textarea",
+            "select",
+            "option",
+            "label",
+            "fieldset",
+            "legend",
+            "iframe",
+            "svg",
+            "path",
+            "canvas",
+            "audio",
+            "video",
+            "source",
+            "track",
+            "embed",
+            "object",
+            "nav",
+            "header",
+            "footer",
+            "main",
+            "section",
+            "article",
+            "aside",
+            "dialog",
+        ]);
+
+        let mut stack: Vec<String> = Vec::new();
+        // We only care about the structure, so we iterate through tags in order
+        for cap in tag_regex.captures_iter(&content) {
+            if let Some(m) = cap.get(0) {
+                let full_tag = m.as_str();
+                let is_close = full_tag.starts_with("</");
+                let tag_name_raw = cap.get(1).unwrap().as_str(); // Capture 1 is name
+                let tag_name = tag_name_raw.to_lowercase();
+
+                if ignore.contains(tag_name.as_str()) {
+                    continue; // Skip common HTML completely (treated as text)
+                }
+
+                if is_close {
+                    // Try to pop matching tag from stack (handle auto-closing / mismatch)
+                    // If we find the tag in the stack, pop everything up to it
+                    if let Some(pos) = stack.iter().rposition(|t| t == &tag_name) {
+                        stack.truncate(pos);
+                    }
+                } else {
+                    // Open Tag
+                    // Logic:
+                    // 1. If stack is empty -> Top Level -> Add
+                    // 2. If stack contains "content" -> Inside Content -> Add as "content_Name"
+                    // 3. Else -> Nested -> Ignore
+
+                    let inside_content = stack.contains(&"content".to_string());
+                    // let is_content_tag = tag_name == "content";
+
+                    if stack.is_empty() {
+                        tags_set.insert(tag_name_raw.to_string());
+                    } else if inside_content {
+                        // Only add if it's NOT just <content> inside <content> (unless distinct?)
+                        // User said: "<content>_<aa>"
+                        tags_set.insert(format!("content_{}", tag_name_raw));
+                    }
+
+                    // Push to stack to track nesting
+                    // Exception: self-closing tags? Regex doesn't distinguish well, but XML-style <tag/> usually not typical in these logs.
+                    // If full_tag ends with "/>" -> don't push?
+                    if !full_tag.trim().ends_with("/>") {
+                        stack.push(tag_name);
+                    }
+                }
+            }
+        }
+
+        let mut v: Vec<String> = tags_set.into_iter().collect();
+        v.sort(); // Consistent order
+        v
+    };
+
     let mut all_floors = Vec::new();
 
     if is_jsonl {
@@ -463,6 +596,7 @@ pub async fn get_history_content(
                     total_pages: 1,
                     current_page: 1,
                     floors: vec![],
+                    detected_tags: detected_tags.clone(),
                 })
                 .unwrap(),
             ));
@@ -501,6 +635,7 @@ pub async fn get_history_content(
             total_pages,
             current_page: actual_page,
             floors: all_floors,
+            detected_tags,
         };
         return Ok(Body::from(serde_json::to_string(&result).unwrap()));
     }
@@ -549,6 +684,7 @@ pub async fn get_history_content(
                 total_pages: 1,
                 current_page: 1,
                 floors: vec![],
+                detected_tags: detected_tags.clone(),
             })
             .unwrap(),
         ));
@@ -567,6 +703,7 @@ pub async fn get_history_content(
         total_pages,
         current_page: actual_page,
         floors: page_floors,
+        detected_tags,
     };
 
     Ok(Body::from(serde_json::to_string(&result).map_err(|e| {

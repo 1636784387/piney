@@ -24,36 +24,52 @@ export function processContentWithScripts(content: string, scripts: RegexScript[
         if (script.promptOnly) continue;
 
         try {
+
             // ST regex format usually implies flags. 
             // Often input as "/regex/flags". If just string, assume global? 
-            // ST Regex scripts are usually just the pattern part or fully specified?
-            // "findRegex": "/\\*.*\\*/|/\\/.*|/\\(.*\\)/g" example.
-
             let pattern = script.findRegex;
             let flags = "g"; // default global
 
-            // Check if pattern is enclosed in slashes with flags
-            // Use greedy match (.*) to find the LAST slash
-            const match = pattern.trim().match(/^\/(.*)\/(.*)$/);
-            if (match) {
-                pattern = match[1];
-                // Filter only valid flags, ignore garbage like illegal backslashes
-                const validFlags = match[2].split('').filter(c => "gimsuy".includes(c)).join('');
+            const trimmed = pattern.trim();
+            // Robust parsing: Find the LAST slash that separates pattern and flags
+            // Standard JS Regex literal syntax: /pattern/flags
+            if (trimmed.startsWith("/") && trimmed.lastIndexOf("/") > 0) {
+                const lastSlashIndex = trimmed.lastIndexOf("/");
+                const extractedPattern = trimmed.substring(1, lastSlashIndex);
+                const extractedFlags = trimmed.substring(lastSlashIndex + 1);
+
+                // Validate flags: Keep only g, i, m, s, u, y
+                // AND ensure 'g' is present if implied by context (though ST usually explicit)
+                const validFlags = extractedFlags.split('').filter(c => "gimsuy".includes(c)).join('');
+
+                pattern = extractedPattern;
                 flags = validFlags || "g";
             }
 
+            // Should fail if pattern is invalid
             const regex = new RegExp(pattern, flags);
 
             // Handle replace string
             let replacement = script.replaceString || "";
+
             // Unescape common sequences that might be stored as literals in JSON
+            // But be careful NOT to break $1, $2, $& etc.
+            // If the user literally typed "\n" in their replacement box, it comes as "\\n" in JSON -> "\n" in string
+            // Wait, if JSON is "replacement": "\\n", JS string is "\n" (length 2). We want actual newline.
+            // If JSON is "replacement": "\n", JS string is newline (length 1). Already good.
+            // ST usually stores them as escaped strings.
             replacement = replacement
                 .replace(/\\n/g, '\n')
                 .replace(/\\r/g, '\r')
-                .replace(/\\"/g, '"') // Fix for users pasting JSON-escaped strings
-                .replace(/\\t/g, '\t');
+                .replace(/\\t/g, '\t')
+                .replace(/\\"/g, '"');
+            // If the string came from JSON.parse, \" is already "
+            // If the user typed \" (literal backslash, quote), it is \\" in JSON.
+            // We typically only unescape standard C-style escapes that users typed literally.
+            ;
 
-            // Special handling for {{saved:x}} macro? ST supports it, maybe skip for now or keep simple.
+            // Note: JS replace(regex, string) automatically handles $1, $2, $&, $', $`
+            // We do NOT need to implement them manually.
 
             processed = processed.replace(regex, replacement);
         } catch (e) {

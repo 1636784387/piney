@@ -1,15 +1,19 @@
 <script lang="ts">
     import * as Dialog from "$lib/components/ui/dialog";
+    import * as AlertDialog from "$lib/components/ui/alert-dialog";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import { Switch } from "$lib/components/ui/switch";
-    import { Loader2, FileJson, AlertCircle, RotateCcw, Regex, Plus, Import } from "lucide-svelte";
+    import { Checkbox } from "$lib/components/ui/checkbox";
+    import { Loader2, FileJson, AlertCircle, RotateCcw, Regex, Plus, Import, GripVertical, Trash2, Download } from "lucide-svelte";
     import { toast } from "svelte-sonner";
     import { cn } from "$lib/utils";
     import { convertJsonlToTxt, scanTags } from "$lib/utils/exportUtils";
-    import RegexItem from "$lib/components/character/regex/RegexItem.svelte";
     import { ScrollArea } from "$lib/components/ui/scroll-area";
+    import { dndzone } from "svelte-dnd-action";
+    import { flip } from "svelte/animate";
+    import { untrack } from "svelte";
 
     let { open = $bindable(false), history, cardId, onUpdate } = $props();
 
@@ -26,20 +30,50 @@
 
     // Regex State
     let regexScripts: any[] = $state([]);
+    // Character name for export filename
+    let characterName = ""; 
+    
+    // Delete Confirmation State
+    let showDeleteDialog = $state(false);
+    let pendingDeleteId: string | null = $state(null);
+    let dontAskDelete = $state(false); 
+    
+    // Init from local storage
+    $effect(() => {
+        if (typeof localStorage !== 'undefined') {
+            dontAskDelete = localStorage.getItem("regex_delete_dont_ask") === "true";
+        }
+    }); 
 
     $effect(() => {
-        if (open) {
-            // Strip extension for display whenever dialog opens
-            name = history.display_name.replace(/\.(txt|jsonl)$/i, '');
-            step = 'main';
-            // Parse regex scripts
-            try {
-                regexScripts = JSON.parse(history.regex_scripts || "[]");
-            } catch {
-                regexScripts = [];
-            }
+        if (open && history.id) {
+            untrack(() => {
+                // Strip extension for display whenever dialog opens
+                name = history.display_name.replace(/\.(txt|jsonl)$/i, '');
+                step = 'main';
+                // Parse regex scripts
+                try {
+                    regexScripts = JSON.parse(history.regex_scripts || "[]");
+                } catch {
+                    regexScripts = [];
+                }
+                fetchCharacterInfo();
+            });
         }
     });
+    
+    async function fetchCharacterInfo() {
+        try {
+            const token = localStorage.getItem("auth_token");
+            const res = await fetch(`${API_BASE}/api/cards/${cardId}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (res.ok) {
+                const data = await res.json();
+                characterName = data.name || "character";
+            }
+        } catch {}
+    }
 
     async function fetchSource() {
         isProcessing = true;
@@ -86,11 +120,6 @@
         });
     }
 
-    function addScript() {
-        // ... (keep generated ID logic if needed internally or remove if fully unused, but user might want 'add' back later. keeping for safety but unused)
-        // ... (omitted for brevity in replacement if not modifying)
-    }
-
     async function updateRegexToBackend(scripts: any[]) {
         const token = localStorage.getItem("auth_token");
         const payload = { regex_scripts: JSON.stringify(scripts) };
@@ -103,56 +132,171 @@
             body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error("Failed to auto-save regex");
+        
+        // Update local object to prevent stale updates from parent
+        history.regex_scripts = JSON.stringify(scripts);
+        // onUpdate(); // Removing this to prevent dialog close/refresh on auto-save
+    }
+
+    // Dnd Handlers
+    function handleSortConsider(e: CustomEvent<DndEvent<any>>) {
+        regexScripts = e.detail.items;
+    }
+
+    function handleSortFinalize(e: CustomEvent<DndEvent<any>>) {
+        regexScripts = e.detail.items;
+        updateRegexToBackend(regexScripts)
+            .catch(() => toast.error("顺序保存失败"));
     }
 
     async function handleImportRegex(e: Event) {
         const input = e.target as HTMLInputElement;
         if (!input.files || input.files.length === 0) return;
-        const file = input.files[0];
         
-        try {
-            const text = await file.text();
-            let data = JSON.parse(text);
-            let scripts: any[] = [];
-            
-            if (Array.isArray(data)) {
-                scripts = data;
-            } else if (data.extensions && Array.isArray(data.extensions.regex_scripts)) {
-                scripts = data.extensions.regex_scripts;
-            } else if (data.data?.extensions?.regex_scripts && Array.isArray(data.data.extensions.regex_scripts)) {
-                 scripts = data.data.extensions.regex_scripts;
-            } else {
-                 toast.error("未识别到有效的正则脚本配置");
-                 return;
+        // Limit to 30 files
+        const files = Array.from(input.files).slice(0, 30);
+        let newScripts: any[] = [];
+        let errorCount = 0;
+        let duplicateCount = 0;
+        
+        // Create lookup set for existing scripts to speed up duplicate check
+        // Key: id (if present) OR content_hash
+        const existingIds = new Set(regexScripts.map(s => s.id).filter(Boolean));
+        const existingContentHashes = new Set(regexScripts.map(s => 
+            `${s.scriptName}|${s.findRegex}|${s.replaceString}|${s.placement?.join(',')}`
+        ));
+
+        for (const file of files) {
+            try {
+                const text = await file.text();
+                let data = JSON.parse(text);
+                let fileScripts: any[] = [];
+                
+                if (Array.isArray(data)) {
+                    fileScripts = data;
+                } else if (data.extensions && Array.isArray(data.extensions.regex_scripts)) {
+                    fileScripts = data.extensions.regex_scripts;
+                } else if (data.data?.extensions?.regex_scripts && Array.isArray(data.data.extensions.regex_scripts)) {
+                     fileScripts = data.data.extensions.regex_scripts;
+                } else if (data.scriptName && data.findRegex) {
+                     // Single script object
+                     fileScripts = [data];
+                } else {
+                     errorCount++;
+                     continue;
+                }
+                
+                // Parse scripts in this file
+                for (const s of fileScripts) {
+                    if (s.scriptName && s.findRegex) {
+                        // Check for duplicates
+                        // If the script has an ID and it's already in our list, it's a duplicate.
+                        if (s.id && existingIds.has(s.id)) {
+                            duplicateCount++;
+                            continue;
+                        }
+                        
+                        // Check content hash
+                        const hash = `${s.scriptName}|${s.findRegex}|${s.replaceString}|${s.placement?.join(',')}`;
+                        if (existingContentHashes.has(hash)) {
+                            duplicateCount++;
+                            continue;
+                        }
+
+                        // Not a duplicate, add to list
+                        const newScript = {
+                            ...s,
+                            id: generateUUID() // Always generate new ID internally to act as local key, unless we want to preserve exact ID? 
+                                               // User said "according to id", so maybe if ID matched we skipped (already done). 
+                                               // But for new script, we should probably ensure it has a unique ID in our system.
+                                               // If we use the imported ID, it might clash later if user imports same file again.
+                                               // But we just checked collisions. So it's safe to generate new ID or keep existing if unique.
+                                               // Let's generate new ID to be safe and consistent, treating import as "copy".
+                        };
+                        newScripts.push(newScript);
+                        
+                        // Add to temp lookups to prevent duplicates WITHIN the import batch
+                        if (s.id) existingIds.add(s.id);
+                        existingContentHashes.add(hash);
+                    } 
+                }
+            } catch (e) {
+                console.error("Parse error", file.name, e);
+                errorCount++;
             }
-            
-            // Normalize scripts
-            scripts = scripts.map(s => ({
-                ...s,
-                id: s.id || generateUUID()
-            }));
-
-            // Immediate Save
-            await updateRegexToBackend(scripts);
-            
-            // Update local state and parent
-            regexScripts = scripts;
-            // Update the history prop too to prevent 'dirty' logic in parent re-saving old value if we didn't update it?
-            // Since we updated backend, the 'history' prop is stale until we call onUpdate.
-            history.regex_scripts = JSON.stringify(scripts); 
-            onUpdate();
-
-            toast.success(`成功导入并保存 ${scripts.length} 条规则`);
-        } catch (error) {
-            console.error(error);
-            toast.error("导入或保存失败");
-        } finally {
-            input.value = "";
         }
+        
+        if (newScripts.length > 0) {
+            // Append to existing
+            const combined = [...regexScripts, ...newScripts];
+            
+            // Sort by scriptName (numeric + Chinese Pinyin support)
+            combined.sort((a, b) => {
+                const nameA = a.scriptName || "";
+                const nameB = b.scriptName || "";
+                return nameA.localeCompare(nameB, "zh-CN", { numeric: true });
+            });
+            
+            regexScripts = combined;
+            
+            await updateRegexToBackend(combined);
+            let msg = `成功导入 ${newScripts.length} 条规则`;
+            if (duplicateCount > 0) msg += ` (跳过 ${duplicateCount} 条重复)`;
+            if (errorCount > 0) msg += ` (跳过 ${errorCount} 个无效文件)`;
+            toast.success(msg);
+        } else {
+            if (duplicateCount > 0 && errorCount === 0) {
+                toast.info(`所有规则 (${duplicateCount}条) 均为重复，已跳过`);
+            } else if (errorCount > 0) {
+                toast.error("未找到有效的正则配置");
+            }
+        }
+        
+        input.value = "";
     }
 
     function deleteScript(id: string) {
+        if (dontAskDelete) {
+            // Direct delete
+            performDelete(id);
+        } else {
+            // Show dialog
+            pendingDeleteId = id;
+            showDeleteDialog = true;
+        }
+    }
+
+    function confirmDelete(dontAsk: boolean) {
+        if (pendingDeleteId) {
+            performDelete(pendingDeleteId);
+            if (dontAsk) {
+                dontAskDelete = true;
+                localStorage.setItem("regex_delete_dont_ask", "true");
+            }
+            showDeleteDialog = false;
+            pendingDeleteId = null;
+        }
+    }
+
+    function performDelete(id: string) {
         regexScripts = regexScripts.filter(s => s.id !== id);
+        updateRegexToBackend(regexScripts);
+    }
+    
+    function handleExportRegex() {
+        if (regexScripts.length === 0) return;
+        const jsonStr = JSON.stringify(regexScripts, null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Filename: [CharacterName]_regex_group.json
+        const safeName = (characterName || "character").replace(/[\\/:*?"<>|]/g, "_");
+        a.download = `${safeName}_regex_group.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     async function handleSave() {
@@ -317,46 +461,67 @@
             {:else if step === 'regex'}
                   <!-- Regex Editor UI -->
                   <div class="flex items-center justify-between mb-2">
-                      <h4 class="text-sm font-medium">正则列表</h4>
-                      <input 
-                            type="file" 
-                            id="regex-import" 
-                            class="hidden" 
-                            accept=".json" 
-                            onchange={handleImportRegex}
-                      />
-                      <Button size="sm" variant="outline" onclick={() => document.getElementById('regex-import')?.click()}>
-                          <Import class="h-4 w-4 mr-1" /> 导入配置
-                      </Button>
+                      <h4 class="text-sm font-medium">正则列表 ({regexScripts.length})</h4>
+                      <div class="flex items-center gap-2">
+                            <Button size="sm" variant="outline" onclick={handleExportRegex} disabled={regexScripts.length === 0}>
+                                <Download class="h-4 w-4 mr-1" /> 导出配置
+                            </Button>
+                            <input 
+                                    type="file" 
+                                    id="regex-import" 
+                                    class="hidden" 
+                                    accept=".json" 
+                                    multiple
+                                    onchange={handleImportRegex}
+                            />
+                            <Button size="sm" variant="outline" onclick={() => document.getElementById('regex-import')?.click()}>
+                                <Import class="h-4 w-4 mr-1" /> 批量导入
+                            </Button>
+                      </div>
                   </div>
-                  <ScrollArea class="h-[300px] pr-4 border rounded-md">
-                      <div class="space-y-2 p-2">
-                          {#if regexScripts.length === 0}
-                              <div class="text-center text-muted-foreground text-sm py-8">暂无规则</div>
-                          {:else}
-                              {#each regexScripts as script, i (script.id)}
-                                  <div class="flex items-center justify-between p-3 border rounded-md bg-card shadow-sm">
-                                      <div class="flex items-center gap-3 min-w-0">
-                                          <div class="flex flex-col min-w-0">
-                                              <span class={cn("text-sm font-medium truncate", script.disabled && "text-muted-foreground line-through")}>
-                                                  {script.scriptName || "未命名规则"}
-                                              </span>
-                                          </div>
-                                      </div>
-                                      <div class="flex items-center gap-2">
-                                          <Switch 
-                                              checked={!script.disabled} 
-                                              onCheckedChange={(v) => {
-                                                  regexScripts[i].disabled = !v;
-                                              }}
-                                              class="scale-90"
-                                          />
+                  
+                  <div class="h-[300px] border rounded-md overflow-y-auto p-2" use:dndzone={{items: regexScripts, flipDurationMs: 300, dropTargetStyle: {outline: 'none'}}} onconsider={handleSortConsider} onfinalize={handleSortFinalize}>
+                      {#if regexScripts.length === 0}
+                          <div class="text-center text-muted-foreground text-sm py-8">暂无规则，请导入</div>
+                      {:else}
+                          {#each regexScripts as script (script.id)}
+                              <div class="flex items-center justify-between p-3 mb-2 border rounded-md bg-card shadow-sm cursor-grab active:cursor-grabbing" animate:flip={{duration: 300}}>
+                                  <div class="flex items-center gap-3 min-w-0">
+                                      <GripVertical class="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                                      <div class="flex flex-col min-w-0">
+                                          <span class={cn("text-sm font-medium truncate", script.disabled && "text-muted-foreground line-through")}>
+                                              {script.scriptName || "未命名规则"}
+                                          </span>
+                                          <span class="text-xs text-muted-foreground truncate font-mono opacity-70">
+                                              {script.findRegex ? script.findRegex.substring(0, 30) : ''}...
+                                          </span>
                                       </div>
                                   </div>
-                              {/each}
-                          {/if}
-                      </div>
-                  </ScrollArea>
+                                  <div class="flex items-center gap-2 shrink-0">
+                                      <Switch 
+                                          checked={!script.disabled} 
+                                          onCheckedChange={(v) => {
+                                              const idx = regexScripts.findIndex(s => s.id === script.id);
+                                              if (idx !== -1) {
+                                                  regexScripts[idx].disabled = !v;
+                                                  // Auto-save on toggle
+                                                  updateRegexToBackend(regexScripts);
+                                              }
+                                          }}
+                                          class="scale-90"
+                                      />
+                                      <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:text-destructive" onclick={() => deleteScript(script.id)}>
+                                          <Trash2 class="h-3 w-3" />
+                                      </Button>
+                                  </div>
+                              </div>
+                          {/each}
+                      {/if}
+                  </div>
+                  <p class="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                      <AlertCircle class="h-3 w-3" />
+                      拖拽可调整顺序，松手即自动保存。越靠前的规则越先执行。
+                  </p>
             {/if}
         </div>
 
@@ -372,4 +537,24 @@
             {/if}
         </Dialog.Footer>
     </Dialog.Content>
+
 </Dialog.Root>
+
+<AlertDialog.Root open={showDeleteDialog} onOpenChange={(v) => { if(!v) showDeleteDialog = false; }}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>删除确认</AlertDialog.Title>
+      <AlertDialog.Description>
+        您确定要删除此正则规则吗？此操作无法撤销。
+      </AlertDialog.Description>
+    </AlertDialog.Header>
+    <div class="flex items-center space-x-2 py-4">
+      <Checkbox id="dont-ask" bind:checked={dontAskDelete} onCheckedChange={(v) => dontAskDelete = v} />
+      <Label for="dont-ask" class="text-sm font-normal cursor-pointer">不再询问 (仅本次会话或直到清除缓存)</Label>
+    </div>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel onclick={() => { showDeleteDialog = false; pendingDeleteId = null; }}>取消</AlertDialog.Cancel>
+      <AlertDialog.Action onclick={() => confirmDelete(dontAskDelete)}>删除</AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
