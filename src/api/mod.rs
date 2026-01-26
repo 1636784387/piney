@@ -8,7 +8,9 @@ pub mod cards;
 pub mod categories;
 pub mod dashboard;
 pub mod history;
+pub mod quick_reply;
 pub mod settings;
+pub mod theater;
 pub mod upload;
 pub mod versions;
 pub mod world_info;
@@ -73,6 +75,19 @@ pub fn routes(db: DatabaseConnection) -> Router {
             "/cards/{id}/history/{history_id}/content",
             get(history::get_history_content).put(history::update_history_content),
         )
+        // 快速回复
+        .route(
+            "/cards/{id}/quick_reply",
+            get(quick_reply::list_quick_replies).post(quick_reply::upload_quick_reply),
+        )
+        .route(
+            "/cards/{id}/quick_reply/{qr_id}",
+            patch(quick_reply::update_quick_reply).delete(quick_reply::delete_quick_reply),
+        )
+        .route(
+            "/cards/{id}/quick_reply/{qr_id}/export",
+            get(quick_reply::export_quick_reply),
+        )
         // 回收站
         .route("/trash/cards", get(cards::list_trash))
         .route("/trash/cards/{id}/restore", post(cards::restore_card))
@@ -120,5 +135,20 @@ pub fn routes(db: DatabaseConnection) -> Router {
         // 数据备份
         .route("/backup/export", get(backup::export_backup))
         .route("/backup/import", post(backup::import_backup))
+        // 小剧场
+        .route(
+            "/theaters",
+            get(theater::list_theaters).post(theater::create_theater),
+        )
+        .route("/theaters/import", post(theater::import_theaters))
+        .route("/theaters/export", get(theater::export_theaters))
+        .route("/theaters/categories", get(theater::list_categories))
+        .route("/theaters/batch", delete(theater::batch_delete_theaters))
+        .route(
+            "/theaters/{id}",
+            get(theater::get_theater)
+                .patch(theater::update_theater)
+                .delete(theater::delete_theater),
+        )
         .with_state(db)
 }

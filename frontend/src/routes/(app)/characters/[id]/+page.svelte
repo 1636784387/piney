@@ -34,6 +34,7 @@
         AlertTriangle,
         User,
         MessageSquareQuote,
+        MessageSquareReply,
         Map,
         StickyNote,
         Terminal,
@@ -52,6 +53,7 @@
     import RegexTab from "$lib/components/character/regex/RegexTab.svelte";
     import ChatHistoryTab from "$lib/components/character/history/ChatHistoryTab.svelte";
     import VersionHistoryTab from "$lib/components/character/versions/VersionHistoryTab.svelte";
+    import QuickReplyTab from "$lib/components/character/quick_reply/QuickReplyTab.svelte";
     import DoctorDialog from "$lib/components/character/DoctorDialog.svelte";
     import { doctorTasks } from "$lib/ai/doctor";
     import { AiFeature } from "$lib/ai/types";
@@ -766,7 +768,8 @@
         { id: "persona", label: "设定", icon: IdCard },
         { id: "world_info", label: "世界书", icon: Globe }, 
         { id: "regex", label: "正则", icon: Regex },
-        { id: "versions", label: "版本历史", icon: GitBranch }, // New Tab
+        { id: "quick_reply", label: "快速回复", icon: MessageSquareReply },
+        { id: "versions", label: "版本历史", icon: GitBranch },
         { id: "chat", label: "聊天记录", icon: History },
     ];
 
@@ -1500,6 +1503,24 @@
                     {/if}
                 </div>
             </div>
+
+            <!-- Quick Reply Tab -->
+            <div class={activeTab === "quick_reply" ? "" : "hidden"}>
+                 <div class="space-y-6 max-w-4xl mx-auto pb-10">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="space-y-1">
+                            <h2 class="text-lg font-semibold">
+                                快速回复
+                            </h2>
+                            <p class="text-xs text-muted-foreground">
+                                管理此角色的快速回复文件
+                            </p>
+                        </div>
+                    </div>
+                    <QuickReplyTab {cardId} />
+                </div>
+            </div>
+
             <!-- Version History Tab -->
             <div class={activeTab === "versions" ? "" : "hidden"}>
                  <div class="space-y-6 max-w-4xl mx-auto pb-10">

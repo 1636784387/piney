@@ -19,6 +19,8 @@ mod m20260114_000001_add_token_counts;
 mod m20260120_000001_create_doctor_tasks;
 mod m20260121_000001_add_source_field;
 mod m20260122_000001_add_dashboard_indices;
+mod m20260124_000001_create_quick_replies;
+mod m20260124_000002_create_theaters;
 
 pub struct Migrator;
 
@@ -43,6 +45,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260120_000001_create_doctor_tasks::Migration),
             Box::new(m20260121_000001_add_source_field::Migration),
             Box::new(m20260122_000001_add_dashboard_indices::Migration),
+            Box::new(m20260124_000001_create_quick_replies::Migration),
+            Box::new(m20260124_000002_create_theaters::Migration),
         ]
     }
 }

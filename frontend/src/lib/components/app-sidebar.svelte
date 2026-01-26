@@ -10,6 +10,7 @@
 	import SquareCode from "@lucide/svelte/icons/square-code";
 	import MessageSquareReply from "@lucide/svelte/icons/message-square-reply";
 	import Trash from "@lucide/svelte/icons/trash-2";
+	import Drama from "@lucide/svelte/icons/drama";
 
 	/*
 	 * Data is now handled in the instance script below
@@ -28,6 +29,7 @@
 		base: [
 			{ title: "看板", url: "/", icon: LayoutDashboard },
 			{ title: "角色库", url: "/characters", icon: IdCard },
+			{ title: "小剧场", url: "/theaters", icon: Drama },
 			{ title: "全局世界书", url: "/worldinfo", icon: BookUser },
 			{ title: "导入", url: "/import", icon: Upload },
 		],
