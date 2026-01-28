@@ -215,58 +215,152 @@ function lightSanitize(html: string): string {
     });
 }
 
-// --- 6.5 处理嵌套的 <details> 标签 ---
-// 用于在已提取的渲染块（如 piney_render）内部查找并处理 <details>
 function processNestedDetails(content: string): string {
-    // Regex to find <details...>...</details> blocks (non-greedy, handles attributes)
-    const detailsRegex = /<details([^>]*)>([\s\S]*?)<\/details>/gi;
+    // Use depth-counting to correctly handle nested <details> tags
+    // Cannot use simple regex because [\s\S]*? is non-greedy and breaks nesting
 
-    return content.replace(detailsRegex, (fullMatch, attrs, innerContent) => {
-        let summaryHTML = '';
-        let bodyContent = innerContent;
+    const startTagRegex = /<details([^>]*)>/gi;
+    const endTag = '</details>';
 
-        // Extract summary if present
-        const sumMatch = innerContent.match(/^\s*<summary([^>]*)>([\s\S]*?)<\/summary>/i);
-        if (sumMatch) {
-            const sumAttrs = sumMatch[1];
-            const sumContent = sumMatch[2];
-            summaryHTML = `<summary${sumAttrs}>${marked.parseInline(sumContent, { breaks: true })}</summary>`;
-            bodyContent = innerContent.slice(sumMatch[0].length);
+    let result = '';
+    let i = 0;
+    const lowerContent = content.toLowerCase();
+
+    while (i < content.length) {
+        // Find next <details> tag
+        startTagRegex.lastIndex = i;
+        const startMatch = startTagRegex.exec(content);
+
+        if (!startMatch) {
+            result += content.slice(i);
+            break;
         }
 
-        // Step 1: Protect code blocks before Markdown processing
-        const codeBlocks: { language: string; content: string }[] = [];
-        let protectedBody = bodyContent.replace(/```(\w*)\n?([\s\S]*?)```/g, (match: string, lang: string, code: string) => {
-            const idx = codeBlocks.length;
-            codeBlocks.push({ language: lang || '', content: code });
-            return `<!--DETAILS_CODE_${idx}-->`;
-        });
+        // Add content before this <details>
+        result += content.slice(i, startMatch.index);
 
-        // Step 2: Force hard breaks and parse body
-        const safeBody = protectedBody.replace(/\n/g, '  \n');
-        let bodyHTML = marked.parse(safeBody, { async: false, breaks: true }) as string;
+        const attrs = startMatch[1] || '';
+        const startIdx = startMatch.index;
+        let j = startMatch.index + startMatch[0].length;
 
-        // Step 3: Restore code blocks with proper styling
-        codeBlocks.forEach((block, idx) => {
-            const placeholder = `<!--DETAILS_CODE_${idx}-->`;
-            const langClass = block.language ? `language-${block.language}` : '';
-            const escaped = block.content
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
+        // Use depth counting to find matching </details>
+        let depth = 1;
+        while (j < content.length && depth > 0) {
+            const remainingLower = lowerContent.slice(j);
+            const nextStartIdx = remainingLower.search(/<details[\s>]/i);
+            const nextEndIdx = remainingLower.indexOf(endTag.toLowerCase());
 
-            // Check if it's an HTML code block (should be rendered in iframe by history page)
-            const isHtml = isHtmlCodeBlock(block.language);
-            const codeHtml = isHtml
-                ? `<pre class="piney-iframe-code" data-lang="${block.language}"><code class="${langClass}">${escaped}</code></pre>`
-                : `<pre><code class="${langClass}">${escaped}</code></pre>`;
+            if (nextEndIdx === -1) {
+                // No closing tag found, take rest of string
+                j = content.length;
+                break;
+            }
 
-            bodyHTML = bodyHTML.replace(`<p>${placeholder}</p>`, codeHtml);
-            bodyHTML = bodyHTML.replace(placeholder, codeHtml);
-        });
+            if (nextStartIdx !== -1 && nextStartIdx < nextEndIdx) {
+                // Found nested <details> before </details>
+                depth++;
+                j += nextStartIdx + 1; // Move past '<'
+                // Find the end of this start tag
+                const tagEnd = content.indexOf('>', j);
+                if (tagEnd !== -1) j = tagEnd + 1;
+            } else {
+                // Found </details>
+                depth--;
+                if (depth === 0) {
+                    j += nextEndIdx + endTag.length;
+                } else {
+                    j += nextEndIdx + endTag.length;
+                }
+            }
+        }
 
-        return `<details${attrs}>${summaryHTML}${bodyHTML}</details>`;
+        // Extract the full <details>...</details> block
+        const fullBlock = content.slice(startIdx, j);
+        const innerContent = content.slice(startMatch.index + startMatch[0].length, j - endTag.length);
+
+        // Process this details block
+        result += processSingleDetails(attrs, innerContent);
+        i = j;
+    }
+
+    return result;
+}
+
+// Helper function to process a single <details> block (may recursively call processNestedDetails)
+function processSingleDetails(attrs: string, innerContent: string): string {
+    let summaryHTML = '';
+    let bodyContent = innerContent;
+
+    // Extract summary if present
+    const sumMatch = innerContent.match(/^\s*<summary([^>]*)>([\s\S]*?)<\/summary>/i);
+    if (sumMatch) {
+        const sumAttrs = sumMatch[1];
+        const sumContent = sumMatch[2];
+        summaryHTML = `<summary${sumAttrs}>${marked.parseInline(sumContent, { breaks: true })}</summary>`;
+        bodyContent = innerContent.slice(sumMatch[0].length);
+    }
+
+    // Step 1: Recursively process any nested <details> in body FIRST
+    bodyContent = processNestedDetails(bodyContent);
+
+    // Step 2: Protect code blocks before Markdown processing
+    const codeBlocks: { language: string; content: string }[] = [];
+    let protectedBody = bodyContent.replace(/```(\w*)\n?([\s\S]*?)```/g, (match: string, lang: string, code: string) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push({ language: lang || '', content: code });
+        return `<!--DETAILS_CODE_${idx}-->`;
     });
+
+    // Step 3: Protect already-processed <details> blocks from Markdown
+    const detailsBlocks: string[] = [];
+    protectedBody = protectedBody.replace(/<details[\s\S]*?<\/details>/gi, (match: string) => {
+        const idx = detailsBlocks.length;
+        detailsBlocks.push(match);
+        return `<!--NESTED_DETAILS_${idx}-->`;
+    });
+
+    // Step 4: Check if content is already HTML (contains styled block elements)
+    // If so, skip Markdown parsing to avoid escaping the HTML
+    const isAlreadyHtml = /<(div|p|span|strong|em|table|ul|ol|li)\s+[^>]*style\s*=/i.test(protectedBody) ||
+        /<(div|table|ul|ol)\s*>/i.test(protectedBody.trim().slice(0, 100));
+
+    let bodyHTML: string;
+    if (isAlreadyHtml) {
+        // Content is already HTML, just preserve it (only apply minimal newline normalization)
+        bodyHTML = protectedBody;
+    } else {
+        // Content is Markdown, parse it
+        const safeBody = protectedBody.replace(/\n/g, '  \n');
+        bodyHTML = marked.parse(safeBody, { async: false, breaks: true }) as string;
+    }
+
+    // Step 5: Restore nested details blocks
+    detailsBlocks.forEach((block, idx) => {
+        const placeholder = `<!--NESTED_DETAILS_${idx}-->`;
+        bodyHTML = bodyHTML.replace(`<p>${placeholder}</p>`, block);
+        bodyHTML = bodyHTML.replace(placeholder, block);
+    });
+
+    // Step 6: Restore code blocks with proper styling
+    codeBlocks.forEach((block, idx) => {
+        const placeholder = `<!--DETAILS_CODE_${idx}-->`;
+        const langClass = block.language ? `language-${block.language}` : '';
+        const escaped = block.content
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        // Check if it's an HTML code block (should be rendered in iframe by history page)
+        const isHtml = isHtmlCodeBlock(block.language);
+        const codeHtml = isHtml
+            ? `<pre class="piney-iframe-code" data-lang="${block.language}"><code class="${langClass}">${escaped}</code></pre>`
+            : `<pre><code class="${langClass}">${escaped}</code></pre>`;
+
+        bodyHTML = bodyHTML.replace(`<p>${placeholder}</p>`, codeHtml);
+        bodyHTML = bodyHTML.replace(placeholder, codeHtml);
+    });
+
+    return `<details${attrs}>${summaryHTML}${bodyHTML}</details>`;
 }
 
 // --- 7. 主渲染管道 ---
