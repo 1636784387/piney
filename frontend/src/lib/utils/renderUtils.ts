@@ -1,6 +1,25 @@
 import { processContentWithScripts, type RegexScript } from "$lib/utils/regexProcessor";
 import { smartFilterTags, processTagNewlines, detectTags } from "$lib/utils/tagFilter";
 import { marked } from "marked";
+// @ts-ignore
+import pkg from 'js-beautify';
+const { html: html_beautify } = pkg;
+
+export function formatHtml(html: string): string {
+    if (!html) return '';
+    try {
+        return html_beautify(html, {
+            indent_size: 2,
+            preserve_newlines: true,
+            max_preserve_newlines: 2,
+            indent_inner_html: true,
+            extra_liners: ['head', 'body', '/html', 'script', 'style']
+        });
+    } catch (e) {
+        console.warn('Formatting failed:', e);
+        return html;
+    }
+}
 
 // ============================================================================
 // 完整渲染管道 v2 - 支持 piney_render、代码块保护、script 标签

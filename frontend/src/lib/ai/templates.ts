@@ -298,5 +298,264 @@ Translate the text into natural, evocative Simplified Chinese.
 Key Principles:
 1. Erase "Translation-ese": Avoid stiff, robotic phrasing; make it read as if originally written in Chinese.
 2. Preserve "Aliveness": Retain the character's unique tone, emotional nuance, and subtext.
-3. Precision: Ensure terminology remains consistent with the character's setting and the world's logic.`
+3. Precision: Ensure terminology remains consistent with the character's setting and the world's logic.`,
+
+  [AiFeature.GENERATE_FRONTEND_STYLE]: `You are an Expert SillyTavern Frontend & Lore Architect.
+Your task is to build a "World Info" and "Frontend Interaction" solution for use in SillyTavern.
+
+### CORE RULES
+1. Generate production-grade HTML/CSS/JS code with rich visual effects (gradients, animations, shadows).
+2. Use UNIQUE class names with random suffixes (e.g., .hud-x9f3) to prevent style conflicts.
+3. Regex MUST use capturing groups ($1, $2...) and support multiline with [\\s\\S]*?.
+4. World Info entry must instruct AI to output content in the format that Regex can match.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object (minified, no markdown code blocks):
+{
+  "worldinfo": {
+    "key": "Entry Name (触发关键词)",
+    "content": "Instruction text for the AI, including format and rules"
+  },
+  "regex": "The regex pattern string (double escape backslashes)",
+  "html": "The full HTML/CSS/JS string (properly escaped for JSON)",
+  "original_text": "Sample text that demonstrates the format AI should output"
+}`
 };
+
+// 前端样式生成的首轮 Prompt 模板
+export const FRONTEND_STYLE_FIRST_ROUND = `# You are an Expert SillyTavern Frontend & Lore Architect.
+Your task is to build a "World Info" and "Frontend Interaction" solution based on the provided data.
+
+### INPUT DATA
+- **Original Text (\`{{original_text}}\`):** {{original_text_value}}
+- **User Request (\`{{user_request}}\`):** {{user_request_value}}
+
+### STRATEGY SELECTOR
+Check the "Original Text":
+- **CASE A (Dynamic Data):** Contains variables, emojis, stats (e.g. "Name: Alice", "HP: 100").
+  -> Use **Complex Strategy**: Strict Regex Capturing + World Info.
+- **CASE B (Simple Trigger):** Just a tag or keyword (e.g. "[Card]", "System Start").
+  -> Use **Simple Strategy**: Simple Regex (no capturing groups needed) + No World Info needed.
+
+### LOGIC GATES (Tag Selection)
+1. **Respect User Request:** If user asks for specific tags (e.g., \`<piney>\`, \`<status>\`), USE THEM.
+2. **Default Behavior (Case A Only):**
+   - For Status/HUDs: Use this structure with explicit line breaks:
+     \`<details>\`
+     \`<summary>状态栏名称</summary>\`
+     \`<statusblock>\`
+     \`CONTENT\`
+     \`</statusblock>\`
+     \`</details>\`
+   - For Decorations: Use \`<piney>CONTENT</piney>\`
+3. **Simple Trigger (Case B):** Just match the trigger keyword exactly.
+
+### EXECUTION TASKS
+
+1. **Design World Info (Lorebook)**
+   - **Case A (Required):** Create a strict instruction forcing AI to output data in the exact format (Simplified Chinese).
+   - **Case B (Optional):** If just a trigger, return \`null\` or "无需启用世界书".
+   - **Detailed Logic (Case A):** You MUST explain HOW variables change (e.g., "Combat: Decrease HP by damage amount").
+   - **Context:** Use \`{{user}}\` for user, \`{{char}}\` for character.
+
+2. **Strict Content Preservation (ZERO TOLERANCE)**
+   - **Original Text is Sacred:** If Original Text contains Emojis (e.g., "👤 姓名"), you MUST preserve them in Regex and World Info format.
+   - **ABSOLUTELY NO RENAMING:** You are FORBIDDEN from changing field names.
+     - ❌ Input: "姓名: Alice" -> Output: "操作员: $1" (FORBIDDEN)
+     - ✅ Input: "姓名: Alice" -> Output: "姓名: $1" (REQUIRED)
+   - **Variable Safety:** NEVER modify \`{{user}}\` or \`{{char}}\`. They must remain exactly as is.
+   - **Label Consistency:** In your generated HTML, the static text (labels) MUST be identical to the keys in Original Text.
+
+3. **Create Regex Script**
+   - Write a JavaScript-compatible Regex to capture variables from the format.
+   - **Capturing (Case A):** Use groups (\`$1\`, \`$2\`...) for dynamic data.
+   - **Exact Match (Case B):** Just match the trigger word.
+   - **Multiline:** MUST support \`[\\s\\S]*?\` to handle multi-line data blocks safely.
+
+4. **Engineer Frontend Code (HTML/CSS/JS)**
+   - **Aesthetics:** strictly follow the style described in User Request.
+   - **Quality:** Write **Production-Grade** code with rich animations and visual effects.
+   - **Scope Safety:** You MUST use unique or random IDs/Class names (e.g., \`.hud-x99\`) to prevent style conflicts.
+   - **Integration:** Embed regex capturing groups (\`$1\`, \`$2\`...) into the HTML structure.
+   - **Formatting:** Output HTML with proper indentation (2 spaces) and line breaks. DO NOT minify.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object (no markdown):
+{
+  "worldinfo": {
+    "key": "条目名称",
+    "content": "中文说明内容... (若是简单触发词模式，设为 null)"
+  },
+  "regex": "正则表达式（双重转义反斜杠）",
+  "html": "格式化的 HTML/CSS/JS 代码（正确转义 JSON）",
+  "original_text": "示例输出格式（如果用户未提供）",
+  "formatted_original_text": "严格匹配正则的原始文本（包含Emoji/标签/{{user}}等）"
+}`;
+
+// 前端样式生成的后续轮次 Prompt 模板
+export const FRONTEND_STYLE_FOLLOWUP = `# You are an Expert SillyTavern Frontend & Lore Architect.
+You are continuing to modify an existing frontend style solution.
+
+### CURRENT STATE
+- **Current HTML Code:**
+\`\`\`html
+{{current_html}}
+\`\`\`
+- **Current Regex:** \`{{current_regex}}\`
+- **Current World Info Key:** {{current_worldinfo_key}}
+- **Current World Info Content:** {{current_worldinfo_content}}
+- **Original Text Context (REFERENCE ONLY):**
+  - Use this ONLY to understand variable mappings (e.g. "Name" -> "$1").
+  - **DO NOT** use this to regenerate the entire HTML structure.
+  \`\`\`text
+  {{original_text}}
+  \`\`\`
+
+### USER REQUEST
+{{user_request_value}}
+
+{{selected_element_instruction}}
+
+### CRITICAL RULES
+1. **Complete Output**: You MUST return the COMPLETE HTML code with all elements preserved.
+2. **Precision Editing**: If a specific element is selected, make changes only related to that element.
+3. **Formatted Output**: Output HTML code with proper indentation and line breaks for readability.
+4. **Chinese Content**: World Info content MUST be written in Simplified Chinese (简体中文).
+5. **Strict Content Preservation (ZERO TOLERANCE)**:
+   - **ABSOLUTELY NO RENAMING**: DO NOT change field names in HTML labels or Regex.
+   - **Label Consistency**: If original text says "姓名:", HTML MUST display "姓名:", NOT "操作员:".
+   - **Variable Safety**: NEVER modify \`{{user}}\` or \`{{char}}\`.
+   - **Emoji Safety**: Preserve Emojis in Regex and World Info.
+
+### MODIFICATION SCOPE (When element is selected)
+**You CAN modify:**
+- ✅ The selected element itself (styles, attributes, content)
+- ✅ CSS rules in \`<style>\` that directly affect the selected element
+- ✅ JavaScript that controls the selected element's behavior
+- ✅ Add new CSS/JS if needed for the requested change
+
+**You CANNOT modify:**
+- ❌ Other HTML elements not related to the request
+- ❌ CSS/JS for unrelated elements
+- ❌ Delete, omit, or skip ANY part of the original code
+
+### EXECUTION
+- Output the FULL, COMPLETE code with targeted modifications
+- Do NOT return only the modified portion - return EVERYTHING
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object (no markdown):
+{
+  "worldinfo": {
+    "key": "条目名称",
+    "content": "中文说明内容..."
+  },
+  "regex": "正则表达式...",
+  "html": "完整的 HTML/CSS/JS 代码"
+}`;
+
+// 仅修改代码的 Prompt 模板（首条消息附加 tagName 时使用）
+export const FRONTEND_STYLE_CODE_ONLY = `# You are an Expert Frontend Code Modifier.
+You are making a TARGETED modification to existing HTML/CSS/JS code.
+
+### IMPORTANT: COMPLETE CURRENT HTML CODE
+The following is the COMPLETE code that must be preserved. You MUST return ALL of this code with only the targeted modifications applied.
+\`\`\`html
+{{current_html}}
+\`\`\`
+
+### SELECTED ELEMENT (Target of modification)
+\`\`\`
+{{selected_element}}
+\`\`\`
+
+### ORIGINAL TEXT CONTEXT (REFERENCE ONLY)
+Use this ONLY for variable context. DO NOT regenerate the code based on this.
+\`\`\`text
+{{original_text}}
+\`\`\`
+
+### USER REQUEST
+{{user_request_value}}
+
+### CRITICAL RULES
+
+**1. PRESERVE THE ENTIRE CODE STRUCTURE**
+- You MUST output the COMPLETE HTML code, including ALL elements from the original.
+- DO NOT delete, omit, or skip ANY elements, tags, or code blocks.
+- The output must contain everything from the original code, with only targeted changes.
+
+**2. WHAT YOU CAN MODIFY**
+- ✅ The selected element itself (add/change inline styles, attributes, content)
+- ✅ CSS rules in \`<style>\` that directly affect the selected element (by class/id)
+- ✅ JavaScript in \`<script>\` that directly controls the selected element's behavior
+- ✅ Add new CSS rules or JS functions IF needed for the user's requested change
+
+**3. WHAT YOU CANNOT MODIFY**
+- ❌ Other HTML elements that are NOT the selected one
+- ❌ CSS rules for OTHER elements
+- ❌ The overall structure, order, or nesting of elements
+- ❌ Any code unrelated to the user's specific request
+
+**4. OUTPUT REQUIREMENT**
+- Return the FULL, COMPLETE HTML code with modifications applied
+- Do NOT return only the modified part - return EVERYTHING
+- Use proper indentation and formatting
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object (no markdown):
+{
+  "worldinfo": null,
+  "regex": null,
+  "html": "完整的 HTML 代码（包含所有原始内容，仅目标部分被修改）"
+}`;
+
+
+// 修复正则和格式的 Prompt 模板
+export const FRONTEND_STYLE_FIX_REGEX = `# You are an Expert SillyTavern Frontend Debugger.
+You need to fix a mismatch between the **Regex**, **World Info Format**, and **Original Text**.
+
+### CURRENT STATE (mismatched)
+- **Regex:** \`{{current_regex}}\`
+- **World Info Key:** {{current_worldinfo_key}}
+- **World Info Content:** {{current_worldinfo_content}}
+- **Current Original Text:**
+\`\`\`text
+{{original_text}}
+\`\`\`
+- **Current HTML Style (PRESERVE THIS):**
+\`\`\`html
+{{current_html}}
+\`\`\`
+
+### PROBLEM
+The current Regex DOES NOT match the Original Text.
+
+### YOUR TASK
+1. **Analyze the style/format** required by the World Info.
+2. **Re-generate the \`formatted_original_text\`**: Create a text block that EXACTLY matches your World Info format.
+   - **PRESERVE EMOJIS!**
+   - **ABSOLUTELY NO RENAMING!**
+   - **KEEP VARIABLES!**
+3. **Re-generate the \`regex\`**: Write a regex that matches your new \`formatted_original_text\`.
+   - **Simple Strategy:** Exact match for simple triggers.
+   - **Complex Strategy:** Capturing groups for data.
+4. **Update the \`html\`**:
+   - **CRITICAL: PRESERVE VISUAL STYLE!** You MUST use the \`Current HTML Style\` as your template.
+   - **DO NOT** change colors, layout, classes, or animations.
+   - **ONLY** update the variable bindings (e.g. change \`$1\` to \`$2\` if the regex group index changed).
+   - **STATIC LABELS:** Ensure static text matches Original Text keys.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object (no markdown):
+{
+  "worldinfo": {
+    "key": "保持不变或微调",
+    "content": "确保描述了正确的格式规则"
+  },
+  "regex": "修复后的正则表达式（双重转义）",
+  "html": "适配新正则的 HTML 代码",
+  "formatted_original_text": "修复后的、符合正则的原始文本（完整内容）"
+}`;
+
+

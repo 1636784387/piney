@@ -7,6 +7,7 @@ pub mod backup;
 pub mod cards;
 pub mod categories;
 pub mod dashboard;
+pub mod frontend_style;
 pub mod history;
 pub mod quick_reply;
 pub mod settings;
@@ -149,6 +150,17 @@ pub fn routes(db: DatabaseConnection) -> Router {
             get(theater::get_theater)
                 .patch(theater::update_theater)
                 .delete(theater::delete_theater),
+        )
+        // 前端样式
+        .route(
+            "/frontend-styles",
+            get(frontend_style::list_styles).post(frontend_style::create_style),
+        )
+        .route(
+            "/frontend-styles/{id}",
+            get(frontend_style::get_style)
+                .put(frontend_style::update_style)
+                .delete(frontend_style::delete_style),
         )
         .with_state(db)
 }

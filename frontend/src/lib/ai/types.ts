@@ -7,8 +7,7 @@ export enum AiFeature {
     TRANSLATE = 'translate', // 翻译
     GENERATE_CHARACTER = 'generate_character', // 生成角色
     GENERATE_WORLD_INFO = 'generate_world_info', // 生成世界书
-    // DIAGNOSIS = 'diagnosis', 
-    // TAG_GENERATION = 'tag_generation'
+    GENERATE_FRONTEND_STYLE = 'generate_frontend_style', // 生成前端样式
 }
 
 export interface PromptVariables {

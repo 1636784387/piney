@@ -356,4 +356,143 @@ export class AiService {
             this.activeRequests--;
         }
     }
+
+    /**
+     * 生成前端样式（皮皮美化生成器）
+     * @param params 生成参数
+     * @param params.originalText 原始文本
+     * @param params.userRequest 用户需求描述
+     * @param params.currentHtml 当前 HTML（后续轮次）
+     * @param params.currentRegex 当前正则（后续轮次）
+     * @param params.currentWorldinfoKey 当前世界书 Key（后续轮次）
+     * @param params.currentWorldinfoContent 当前世界书内容（后续轮次）
+     * @param params.selectedElement 用户选中的元素描述（交互式编辑）
+     * @param params.isFirstRound 是否首轮生成
+     */
+    static async generateFrontendStyle(params: {
+        originalText: string;
+        userRequest: string;
+        currentHtml?: string;
+        currentRegex?: string;
+        currentWorldinfoKey?: string;
+        currentWorldinfoContent?: string;
+        selectedElement?: string;
+        isFirstRound: boolean;
+        isFixMode?: boolean; // 新增：是否为修复模式
+    }): Promise<{
+        worldinfo: { key: string; content: string };
+        regex: string;
+        html: string;
+        original_text?: string;
+        formatted_original_text?: string;
+    }> {
+        if (this.activeRequests >= this.MAX_CONCURRENT) {
+            throw new Error(`AI 请求队列已满 (${this.activeRequests}/${this.MAX_CONCURRENT})，请稍后再试`);
+        }
+
+        this.activeRequests++;
+        try {
+            // 前端样式生成不使用全局提示词（避免附加 NSFW 相关内容）
+            // const globalPrompt = await this.getGlobalPrompt();
+            const feature = AiFeature.GENERATE_FRONTEND_STYLE;
+
+            let userPrompt: string;
+
+            // 判断使用哪个模板：
+            // 0. 修复模式（用户点击“修复正则”）
+            // 1. 首轮 + 无选中元素 → 首轮生成模板
+            // 2. 首轮 + 有选中元素 → 仅修改代码模板（用户修改已有样式）
+            // 3. 非首轮 → 后续修改模板
+            const isFirstRoundCodeOnly = params.isFirstRound && params.selectedElement;
+            const useFirstRoundTemplate = params.isFirstRound && !params.selectedElement;
+
+            if (params.isFixMode) {
+                // 修复模式 - 使用 FRONTEND_STYLE_FIX_REGEX 模板
+                const { FRONTEND_STYLE_FIX_REGEX } = await import('./templates');
+                userPrompt = FRONTEND_STYLE_FIX_REGEX
+                    .replace(/{{current_regex}}/g, params.currentRegex || '')
+                    .replace(/{{current_worldinfo_key}}/g, params.currentWorldinfoKey || '')
+                    .replace(/{{current_worldinfo_content}}/g, params.currentWorldinfoContent || '')
+                    .replace(/{{original_text}}/g, params.originalText || '')
+                    .replace(/{{current_html}}/g, params.currentHtml || '');
+            } else if (isFirstRoundCodeOnly) {
+                // 首轮但有选中元素 - 使用仅修改代码模板
+                const { FRONTEND_STYLE_CODE_ONLY } = await import('./templates');
+                userPrompt = FRONTEND_STYLE_CODE_ONLY
+                    .replace(/{{current_html}}/g, params.currentHtml || '')
+                    .replace(/{{selected_element}}/g, params.selectedElement || '')
+                    .replace(/{{original_text}}/g, params.originalText || '')
+                    .replace(/{{user_request_value}}/g, params.userRequest);
+            } else if (useFirstRoundTemplate) {
+                // 首轮对话 - 使用 FRONTEND_STYLE_FIRST_ROUND 模板
+                const { FRONTEND_STYLE_FIRST_ROUND } = await import('./templates');
+                userPrompt = FRONTEND_STYLE_FIRST_ROUND
+                    .replace(/{{original_text_value}}/g, params.originalText || '（未提供）')
+                    .replace(/{{user_request_value}}/g, params.userRequest);
+            } else {
+                // 后续对话 - 使用 FRONTEND_STYLE_FOLLOWUP 模板
+                const { FRONTEND_STYLE_FOLLOWUP } = await import('./templates');
+
+                const selectedInstruction = params.selectedElement
+                    ? `### SELECTED ELEMENT (User wants to modify this specific part)\n\`\`\`\n${params.selectedElement}\n\`\`\``
+                    : '';
+
+                userPrompt = FRONTEND_STYLE_FOLLOWUP
+                    .replace(/{{current_html}}/g, params.currentHtml || '')
+                    .replace(/{{current_regex}}/g, params.currentRegex || '')
+                    .replace(/{{current_worldinfo_key}}/g, params.currentWorldinfoKey || '')
+                    .replace(/{{current_worldinfo_content}}/g, params.currentWorldinfoContent || '')
+                    .replace(/{{original_text}}/g, params.originalText || '')
+                    .replace(/{{user_request_value}}/g, params.userRequest)
+                    .replace(/{{selected_element_instruction}}/g, selectedInstruction);
+            }
+
+            const { SYSTEM_PROMPTS } = await import('./templates');
+            // 前端样式生成不附加全局提示词
+            const systemPrompt = SYSTEM_PROMPTS[feature] || '';
+
+            const messages = [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ];
+
+            const token = localStorage.getItem("auth_token");
+            const response = await this.execute(feature, messages, token);
+
+            let content = response.choices?.[0]?.message?.content || "";
+            if (!content) {
+                throw new Error("AI 返回空内容");
+            }
+
+            // 清理 markdown 代码块
+            content = content.trim();
+            if (content.startsWith('```json')) {
+                content = content.slice(7);
+            } else if (content.startsWith('```')) {
+                content = content.slice(3);
+            }
+            if (content.endsWith('```')) {
+                content = content.slice(0, -3);
+            }
+            content = content.trim();
+
+            // 解析 JSON
+            try {
+                const result = JSON.parse(content);
+                return {
+                    worldinfo: result.worldinfo || { key: '', content: '' },
+                    regex: result.regex || '',
+                    html: result.html || '',
+                    original_text: result.original_text,
+                    formatted_original_text: result.formatted_original_text
+                };
+            } catch (e) {
+                console.error("Failed to parse AI response:", content);
+                throw new Error("AI 返回格式错误，无法解析 JSON");
+            }
+        } finally {
+            this.activeRequests--;
+        }
+    }
 }
+
