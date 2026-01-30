@@ -158,8 +158,8 @@
 
             if (!res.ok) throw new Error("Upload failed");
 
-            const saved = await res.json(); // API returns ChatHistoryDto now (not array)
-            onImport([saved]); // Keep interface valid expecting array (or update onImport too)
+            const saved = await res.json();
+            onImport([saved]);
             
             toast.success(`导入成功`);
             open = false;

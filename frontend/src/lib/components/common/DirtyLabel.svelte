@@ -10,7 +10,7 @@
         ...rest
     }: HTMLLabelAttributes & { isDirty?: boolean; children?: any } = $props();
 
-    const dirtyStyles = ""; // No text style changes
+    const dirtyStyles = "";
 </script>
 
 <Label

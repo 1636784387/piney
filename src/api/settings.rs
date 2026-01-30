@@ -15,6 +15,8 @@ pub struct Settings {
     pub ai_endpoint: Option<String>,
     /// AI API 密钥（返回时隐藏）
     pub ai_api_key_set: bool,
+    /// 用户协议是否已同意
+    pub user_agreement_accepted: bool,
     /// AI 模型名称
     pub ai_model: Option<String>,
     /// 主题模式
@@ -43,6 +45,7 @@ pub async fn get(State(db): State<DatabaseConnection>) -> Json<Settings> {
         ai_provider: None,
         ai_endpoint: None,
         ai_api_key_set: false,
+        user_agreement_accepted: false,
         ai_model: None,
         theme: "system".to_string(),
         language: "zh-CN".to_string(),
@@ -58,6 +61,7 @@ pub async fn get(State(db): State<DatabaseConnection>) -> Json<Settings> {
         match setting.key.as_str() {
             "ai_provider" => s.ai_provider = Some(setting.value),
             "ai_endpoint" => s.ai_endpoint = Some(setting.value),
+            "user_agreement_accepted" => s.user_agreement_accepted = setting.value == "true",
             "ai_model" => s.ai_model = Some(setting.value),
             "theme" => s.theme = setting.value,
             "language" => s.language = setting.value,
@@ -90,6 +94,7 @@ pub async fn update(
             let key_db = match k.as_str() {
                 "ai_provider" => "ai_provider",
                 "ai_endpoint" => "ai_endpoint",
+                "user_agreement_accepted" => "user_agreement_accepted",
                 "ai_model" => "ai_model",
                 "theme" => "theme",
                 "language" => "language",

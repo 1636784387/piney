@@ -625,9 +625,6 @@ export function processTextWithPipeline(text: string, options: RenderOptions): P
             // 3. 换行处理 - Case Insensitive Check
             // 如果标签启用了换行，我们对块内容应用 processTagNewlines
             if (options.newlineTags && options.newlineTags.some(t => t.toLowerCase() === tagName)) {
-                // Reuse processTagNewlines logic on the block string itself
-                // We pass the detected lowercase tagName to ensure regex matches
-                // Force=true to bypass hasCommonHtml check for these explicit blocks
                 return processTagNewlines(block, [tagName], [tagName], true);
             }
             return block;
@@ -654,7 +651,7 @@ export function processTextWithPipeline(text: string, options: RenderOptions): P
     }
 
     // ========== Step 5: 标签换行处理（剩余文本）==========
-    // 用户要求其他标签（如 thought）应用 <content> 的逻辑（即不强制分行，交给 Markdown 处理）
+    // 不强制分行，交给 Markdown 处理
     // 所以这里不再对剩余文本进行 processTagNewlines 处理
     /*
     if (options.newlineTags) {

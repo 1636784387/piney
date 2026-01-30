@@ -423,11 +423,6 @@
 
         return {
             update(newContent: string) {
-                // If content changes, everything re-renders in the keyed block or @html usually
-                // But if we use just @html and this action, we might need to re-run
-                // However, usually the DOM is trashed and rebuilt by Svelte's @html
-                // So this action destroys and re-inits?
-                // Let's assume 'destroy' is called, then 'mount' again.
             },
             destroy() {
                 mountedComponents.forEach(c => unmount(c));

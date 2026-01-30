@@ -48,8 +48,6 @@ export class AiService {
     private static cache: { tags: string[] | null, globalPrompt: string | null } = { tags: null, globalPrompt: null };
 
     private static async getGlobalPrompt(): Promise<string> {
-        // Simple caching or fresh fetch? Let's fresh fetch for now to be safe, or lightweight cache.
-        // settings are usually stable.
         const token = localStorage.getItem("auth_token");
         try {
             const res = await fetch(`${API_BASE}/api/settings`, {
@@ -66,9 +64,6 @@ export class AiService {
     }
 
     private static async getSystemTags(): Promise<string[]> {
-        // Fetch all cards to get unique tags
-        // This is heavy, but matches backend logic.
-        // Optimization: In a real app we might want a dedicated /api/tags endpoint.
         const token = localStorage.getItem("auth_token");
         try {
             const res = await fetch(`${API_BASE}/api/cards`, {
@@ -104,12 +99,11 @@ export class AiService {
             this.getSystemTags()
         ]);
 
-        // 1. 准备变量 (Determine task instruction)
+        // 1. 准备变量
         const variables = this.prepareVariables(card, systemTags);
 
         // 2. 构建提示词
         const userPrompt = PromptBuilder.buildUserPrompt(AiFeature.OVERVIEW, variables);
-        // Prepend global prompt (Break Limitations)
         const systemPrompt = PromptBuilder.getSystemPrompt(AiFeature.OVERVIEW, globalPrompt);
 
         // 3. 构造消息
@@ -140,10 +134,9 @@ export class AiService {
     }
 
     /**
-     * 获取调试信息（不实际调用 AI）
+     * 获取调试信息
      */
     static async getPromptDebugInfo(card: any, feature: AiFeature = AiFeature.OVERVIEW) {
-        // Need async fetch for context
         const [globalPrompt, systemTags] = await Promise.all([
             this.getGlobalPrompt(),
             this.getSystemTags()
@@ -158,7 +151,7 @@ export class AiService {
     }
 
     /**
-     * 通用文本处理（优化/翻译）
+     * 通用文本处理
      */
     static async processText(feature: AiFeature, text: string) {
         if (this.activeRequests >= this.MAX_CONCURRENT) {
@@ -167,13 +160,10 @@ export class AiService {
 
         this.activeRequests++;
         try {
-            // 加载全局配置
             const globalPrompt = await this.getGlobalPrompt();
 
             const variables = {
                 text,
-                // 补全 PromptVariables 要求的必需字段为空字符串，避免 TS 报错
-                // 因为 PromptBuilder 可能只需要 {{text}}，但也可能校验类型
                 name: "",
                 description: "",
                 personality: "",
@@ -209,12 +199,6 @@ export class AiService {
     }
 
     private static prepareVariables(card: any, allSystemTags: string[]): PromptVariables {
-        // card.data 在数据库中是字符串字段，但在前端可能已经是解析后的对象或字符串
-        // 调用此方法的组件通常拥有完整的 card 对象。
-        // 我们期望 `card` 是包含字段的映射对象。
-        // 但是，原始数据库 card 的 `data` 是字符串。
-        // 我们将稳健地处理这两种情况。
-
         let cardData: any = {};
         try {
             cardData = typeof card.data === 'string' ? JSON.parse(card.data) : card.data;
@@ -223,10 +207,8 @@ export class AiService {
         }
         cardData = cardData || {};
 
-        // Helper to get field from root or nested data
         const getField = (key: string) => cardData[key] || cardData.data?.[key] || "";
 
-        // Tag Generation Logic
         let currentTags: string[] = [];
         try {
             currentTags = typeof card.tags === 'string' ? JSON.parse(card.tags) : card.tags;
@@ -268,7 +250,6 @@ export class AiService {
         const variables: any = {
             user_request: userInput,
             current_world_info: currentWorldInfo,
-            // Required placeholders
             name: "", description: "", personality: "", first_mes: "", creator_notes: ""
         };
 
@@ -283,18 +264,15 @@ export class AiService {
         try {
             const token = localStorage.getItem("auth_token");
             const result = await this.execute(feature, messages, token);
-            // Parse OpenAI-compatible response
             let content = result.choices?.[0]?.message?.content || "";
-            if (!content && result.response) content = result.response; // Fallback
+            if (!content && result.response) content = result.response;
 
 
 
-            // 1. Try to extract JSON array via Regex (Most robust)
             const jsonMatch = content.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
                 content = jsonMatch[0];
             } else {
-                // 2. Fallback cleanup
                 content = content.replace(/^[\s\S]*?```json/i, "").replace(/^[\s\S]*?```/i, "").replace(/```[\s\S]*$/, "").trim();
             }
 
@@ -305,7 +283,7 @@ export class AiService {
             }
         } catch (e: any) {
             console.error("Generate World Info Error:", e);
-            throw e; // Re-throw to be caught by UI
+            throw e;
         }
     }
 
@@ -378,7 +356,7 @@ export class AiService {
         currentWorldinfoContent?: string;
         selectedElement?: string;
         isFirstRound: boolean;
-        isFixMode?: boolean; // 新增：是否为修复模式
+        isFixMode?: boolean;
     }): Promise<{
         worldinfo: { key: string; content: string };
         regex: string;
@@ -392,8 +370,6 @@ export class AiService {
 
         this.activeRequests++;
         try {
-            // 前端样式生成不使用全局提示词（避免附加 NSFW 相关内容）
-            // const globalPrompt = await this.getGlobalPrompt();
             const feature = AiFeature.GENERATE_FRONTEND_STYLE;
 
             let userPrompt: string;

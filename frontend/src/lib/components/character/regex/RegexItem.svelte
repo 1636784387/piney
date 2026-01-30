@@ -28,8 +28,6 @@
         script = $bindable(),
         onDelete,
         isOpen = $bindable(),
-        // isDirty prop from parent is aggregate, but we can compute granular here too.
-        // Actually parent aggregate is good for list status, local granular is good for fields.
         isDirty = false, 
         lastSaved = 0
     } = $props<{
@@ -43,8 +41,7 @@
     let isAdvanced = $state(false);
 
     // --- Granular Dirty Checking & Local State ---
-    // We use local state for inputs to ensure stable comparison against snapshot and avoid direct deep mutation issues.
-    
+
     // Initial Snapshot
     let originalScript = $state(JSON.parse(JSON.stringify(script)));
 
@@ -184,7 +181,6 @@
             findRegex: localFind,
             replaceString: localReplace,
             disabled: false,
-            // flags map to what? processContentWithScripts handles it if we follow format.
         };
         
         // Use standard processor for regex part

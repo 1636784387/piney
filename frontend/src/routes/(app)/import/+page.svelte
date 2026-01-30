@@ -93,7 +93,6 @@
 
         try {
             // Calculate total files for progress bar
-            // Calculate total files for progress bar
             totalFilesCount = files.length;
             currentFileIndex = 0;
             progress = 0;
@@ -189,7 +188,6 @@
                         },
                     ];
                     failCount++;
-                    // Update progress even for skipped files
                     // Update progress even for skipped files
                     progress = Math.round(((i + 1) / totalFilesCount) * 100);
                     continue;
@@ -398,6 +396,3 @@
         </p>
     </Tabs>
 </div>
-
-<!-- 第一步：警告对话框 -->
-

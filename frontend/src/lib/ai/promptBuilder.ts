@@ -16,7 +16,6 @@ export class PromptBuilder {
             return "";
         }
 
-        // Replace {{key}} with value
         return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
             return variables[key] || "";
         });

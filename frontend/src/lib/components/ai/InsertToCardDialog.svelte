@@ -29,7 +29,7 @@
             const params = new URLSearchParams({
                 sort: "updated_at",
                 order: "desc",
-                page_size: "50", // Fetch enough recent cards
+                page_size: "50",
                 search: searchTerm
             });
             
@@ -49,11 +49,10 @@
         }
     }
 
-    // Debounce search
     let timer: any;
     $effect(() => {
         if (open) {
-            fetchCards(); // Initial load
+            fetchCards();
             selectedCard = null;
         }
     });

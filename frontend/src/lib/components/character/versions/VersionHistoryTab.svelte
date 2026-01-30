@@ -27,9 +27,9 @@
     interface Props {
         cardId: string;
         onRestore?: () => void;
-        onClaim?: () => void; // 认领后回调
+        onClaim?: () => void;
         currentVersion?: string | null;
-        source?: string; // "import" | "local"
+        source?: string;
     }
 
     let { cardId, onRestore, onClaim, currentVersion = null, source = "import" }: Props = $props();
@@ -226,7 +226,7 @@
     function formatDate(dateStr: string) {
         if (!dateStr) return "";
         const d = dateStr.endsWith("Z") ? new Date(dateStr) : new Date(dateStr + "Z");
-        return format(d, "yyyy-MM-dd HH:mm"); // Removed seconds as requested
+        return format(d, "yyyy-MM-dd HH:mm");
     }
 
     function isCurrent(v: Version) {

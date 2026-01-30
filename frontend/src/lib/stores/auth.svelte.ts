@@ -6,7 +6,7 @@ import { API_BASE } from '$lib/api';
 
 class AuthStore {
     authenticated = $state(false);
-    initialized = $state(false); // Backend config initialized
+    initialized = $state(false);
     loading = $state(true);
     username = $state<string | null>(null);
     avatar = $state<string>("");
@@ -27,26 +27,9 @@ class AuthStore {
                 const data = await res.json();
                 this.initialized = data.initialized;
 
-                // If backend says initialized=true and username is present, we are logged in
-                // (My status endpoint returns username if token is valid? 
-                // Wait, my Rust logic for get_status currently returns username from Config, ignoring token!
-                // I need to update Rust get_status logic to actually check token if I want "authenticated" field to be accurate there?
-                // OR, I just rely on token validation middleware for protected routes.
-                // Re-reading Rust Plan: "authenticated: false, // Client should check this via middleware/token"
-                // So Status endpoint ONLY tells us if Config exists.
-                // To check if Token is valid, we should probably try a protected endpoint or verify token locally (bad idea) or have a /me endpoint.
-
-                // Let's rely on:
-                // 1. If !data.initialized => Redirect Signup.
-                // 2. If data.initialized:
-                //      If we have token in localStorage => Assume logged in (validity checked on next API call).
-                //      Else => Redirect Login.
-
                 this.authenticated = !!token;
                 this.username = data.username;
 
-                // Create a separate call to get avatar?
-                // Or we can just do it here.
                 if (this.authenticated) {
                     this.fetchAvatar();
                 }
@@ -71,8 +54,6 @@ class AuthStore {
 
         if (this.initialized && !this.authenticated) {
             if (path !== '/login' && path !== '/sign-up') goto('/login');
-            // Allow sign-up page? No, if initialized, signup is disabled (or should be).
-            // Actually setup endpoint blocks it.
             return;
         }
 

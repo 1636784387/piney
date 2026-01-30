@@ -72,10 +72,10 @@
                 indent_size: 2,
                 preserve_newlines: true,
                 max_preserve_newlines: 2,
-                wrap_line_length: 120, // Set a reasonable line length
-                wrap_attributes: 'auto', // Don't force expand attributes to new lines
+                wrap_line_length: 120,
+                wrap_attributes: 'auto',
                 wrap_attributes_indent_size: 2,
-                unformatted: [] // Ensure even inline tags are formatted if needed
+                unformatted: []
             });
             
             view.dispatch({
@@ -188,22 +188,18 @@
                 dropCursor(),
                 EditorState.allowMultipleSelections.of(true),
                 indentationMarkers(),
-                EditorView.lineWrapping, // Soft wrapping
+                EditorView.lineWrapping,
                 syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
                 bracketMatching(),
                 rectangularSelection(),
                 crosshairCursor(),
                 highlightActiveLine(),
-                search({ top: true }), // Enable search extension state
+                search({ top: true }),
                 keymap.of([
                     ...defaultKeymap,
                     ...historyKeymap,
                     ...foldKeymap,
                     indentWithTab
-                    // Removed default searchKeymap to avoid conflicts with our UI, or keep it?
-                    // Keeping it allows Ctrl+F/G to work naturally if focus is in editor.
-                    // But we want to redirect Ctrl+F to OUR UI?
-                    // For now, let's keep searchKeymap but maybe we should override Ctrl+F
                 ]),
                 langCompartment.of(languages[language as keyof typeof languages]),
                 oneDark, 

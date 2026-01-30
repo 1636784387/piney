@@ -7,15 +7,9 @@
 	import Images from "@lucide/svelte/icons/images";
 	import DatabaseBackup from "@lucide/svelte/icons/database-backup";
 	import Settings from "@lucide/svelte/icons/settings";
-	import BookPlus from "@lucide/svelte/icons/book-plus";
 	import SquareCode from "@lucide/svelte/icons/square-code";
-	import MessageSquareReply from "@lucide/svelte/icons/message-square-reply";
 	import Trash from "@lucide/svelte/icons/trash-2";
 	import Drama from "@lucide/svelte/icons/drama";
-
-	/*
-	 * Data is now handled in the instance script below
-	 */
 </script>
 
 <script lang="ts">
@@ -26,7 +20,7 @@
 	import type { ComponentProps } from "svelte";
 
 	const data = {
-		// Group 1: 基础功能 (无标题)
+		// Group 1: 基础功能
 		base: [
 			{ title: "看板", url: "/", icon: LayoutDashboard },
 			{ title: "角色库", url: "/characters", icon: IdCard },
@@ -37,18 +31,7 @@
 		],
 		// Group 2: AI 实验室
 		aiLab: [
-		//	{ title: "角色融合", url: "/ai/fusion", icon: Dna },
-		//	{
-		//		title: "世界书生成",
-		//		url: "/ai/worldbook-create",
-		//		icon: BookPlus,
-		//	},
 			{ title: "前端样式", url: "/ai/code", icon: SquareCode },
-		//	{
-		//		title: "QR生成",
-		//		url: "/ai/quickreply",
-		//		icon: MessageSquareReply,
-		//	},
 		],
 		// Group 3: 系统
 		system: [

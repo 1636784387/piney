@@ -46,9 +46,6 @@
             if (!res.ok) throw new Error("Failed to update avatar");
 
             toast.success("头像已更新");
-            // Ideally trigger a reload of user info in parent or auth store
-            // For now, parent might update via binding? No, need to reload page or store.
-            // Let's assume auth store or page reload.
             location.reload();
         } catch (e) {
             toast.error("更新头像失败");
@@ -135,9 +132,6 @@
             }
             open = false;
         } catch (e: any) {
-            // Handle error e.g. "Invalid current password"
-            // Usually e.message is a JSON string if calling res.text() above failed to parse generic error?
-            // Actually backend returns text for error.
             toast.error(e.message);
         } finally {
             loading = false;
@@ -198,11 +192,6 @@
                         />
                     </div>
                 </div>
-                <!-- Remove manual save button since we auto-save, or keep it for manual URL entry? 
-                     User said "don't use link way", so remove URL input and manual save. 
-                     Wait, if upload updates `avatarUrl`, we still need to save to settings. 
-                     I put auto-save in handleFileUpload. So we can remove this button.
-                -->
             </Tabs.Content>
 
             <!-- Account Tab (Username/Password) -->

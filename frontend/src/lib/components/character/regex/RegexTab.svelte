@@ -58,10 +58,10 @@
 
         // Check for modifications
         current.forEach((script: any) => {
-            if (!script.id) return; // New/Temp
+            if (!script.id) return;
             const orig = original.find((s: any) => s.id === script.id);
             if (!orig) {
-                dirtySet.add(script.id); // New script
+                dirtySet.add(script.id);
             } else {
                 if (JSON.stringify(script) !== JSON.stringify(orig)) {
                     dirtySet.add(script.id);
@@ -69,8 +69,6 @@
             }
         });
 
-        // Deleted scripts (tracked by existence diff, but here we just need ID set for UI)
-        // Global dirty handles deletions.
         return dirtySet;
     });
 
@@ -108,8 +106,6 @@
     function confirmDiscard() {
         bypassCheck = true;
         showUnsavedDialog = false;
-        // Revert changes? No, just navigate away.
-        // If we stay, re-snap? No.
         if (pendingTarget) {
             goto(pendingTarget);
         }
@@ -142,18 +138,17 @@
             findRegex: "",
             replaceString: "",
             trimStrings: [],
-            placement: [2], // AI Output by default
+            placement: [2],
             disabled: false,
-            markdownOnly: true, // Default per specs
+            markdownOnly: true,
             promptOnly: false,
-            runOnEdit: true, // Default
+            runOnEdit: true,
             substituteRegex: 0,
             minDepth: null,
             maxDepth: null
         };
         
         if (!data.extensions.regex_scripts) data.extensions.regex_scripts = [];
-        // Use assignment to trigger reactivity (Svelte 5 legacy/hybrid mode safety)
         data.extensions.regex_scripts = [...data.extensions.regex_scripts, newScript];
         onChange();
         toast.success("已添加新正则");
@@ -179,8 +174,6 @@
                 let importedCount = 0;
 
                 const validScripts = items.filter((item: any) => {
-                    // Basic Validation: Must look like a regex script
-                    // Check for key fields present in addScript
                     return (
                         typeof item === 'object' &&
                         item !== null &&
@@ -188,9 +181,8 @@
                         'findRegex' in item
                     );
                 }).map((item: any) => {
-                    // Sanitize and Normalize
                     return {
-                        id: generateUUID(), // Always generate new ID
+                        id: generateUUID(),
                         scriptName: item.scriptName || "导入的正则",
                         findRegex: item.findRegex || "",
                         replaceString: item.replaceString || "",
@@ -213,22 +205,20 @@
 
                 if (!data.extensions.regex_scripts) data.extensions.regex_scripts = [];
                 data.extensions.regex_scripts = [...data.extensions.regex_scripts, ...validScripts];
-                onChange(); // Trigger dirty state
+                onChange();
                 toast.success(`成功导入 ${validScripts.length} 个正则`);
                 
             } catch (err) {
                 console.error("Import failed", err);
                 toast.error("导入失败：无效的 JSON 文件");
             } finally {
-                input.value = ""; // Reset
+                input.value = "";
             }
         };
         reader.readAsText(file);
     }
 
     function deleteScript(scriptId: string) {
-        // No confirmation dialog as requested.
-        // Deletion marks state as dirty (unsaved), so user can revert by not saving.
         data.extensions.regex_scripts = data.extensions.regex_scripts.filter((s: any) => s.id !== scriptId);
         onChange();
         toast.success("正则已删除");
@@ -240,12 +230,11 @@
         if (e.dataTransfer) {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.dropEffect = 'move';
-            // Optional: Set drag image
         }
     }
 
     function handleDragOver(e: DragEvent, index: number) {
-        e.preventDefault(); // Necessary to allow dropping
+        e.preventDefault();
         e.dataTransfer!.dropEffect = 'move';
         
         if (draggedIndex === null || draggedIndex === index) return;
@@ -323,12 +312,6 @@
 </div>
             {:else}
                 {#each filteredScripts as script, index (script.id)}
-                    <!-- 
-                        Note: Index here is index in filtered list. 
-                        Ideally we want index in original list for handling drag target accurately 
-                        if we support drag on filtered list (usually disabled or tricky).
-                        For now, assuming search clears drag.
-                    -->
                     {@const realIndex = scripts.findIndex((s: any) => s.id === script.id)}
                     <div
                         role="listitem"

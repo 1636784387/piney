@@ -97,11 +97,9 @@
 					<DropdownMenu.Item onclick={handleModeToggle}>
 						<div class="flex items-center gap-2">
 							<div class="relative size-4">
-								<!-- Light Mode: Show Moon. Dark Mode: Hidden -->
 								<MoonIcon
 									class="size-4 absolute rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0"
 								/>
-								<!-- Dark Mode: Show Sun. Light Mode: Hidden -->
 								<SunIcon
 									class="size-4 absolute rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100"
 								/>

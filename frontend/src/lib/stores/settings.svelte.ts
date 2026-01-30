@@ -10,6 +10,7 @@ export interface Settings {
     ai_provider: string | null;
     ai_endpoint: string | null;
     ai_api_key_set: boolean;
+    user_agreement_accepted: boolean;
     ai_model: string | null;
     theme: 'light' | 'dark' | 'system';
     language: string;
@@ -19,6 +20,7 @@ export interface Settings {
 
 interface SettingsState extends Settings {
     loading: boolean;
+    loaded: boolean;
     error: string | null;
 }
 
@@ -26,12 +28,14 @@ const initialState: SettingsState = {
     ai_provider: null,
     ai_endpoint: null,
     ai_api_key_set: false,
+    user_agreement_accepted: false,
     ai_model: null,
     theme: 'system',
     language: 'zh-CN',
     default_view: 'grid',
     items_per_page: 20,
     loading: false,
+    loaded: false,
     error: null
 };
 
@@ -51,7 +55,8 @@ function createSettingsStore() {
                 update(state => ({
                     ...state,
                     ...response.data,
-                    loading: false
+                    loading: false,
+                    loaded: true
                 }));
                 // Sync theme to mode-watcher
                 if (response.data.theme) {
@@ -61,7 +66,8 @@ function createSettingsStore() {
                 update(state => ({
                     ...state,
                     error: response.error || '加载失败',
-                    loading: false
+                    loading: false,
+                    loaded: true
                 }));
             }
         },

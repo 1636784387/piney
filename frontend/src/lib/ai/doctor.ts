@@ -27,7 +27,7 @@ export interface SseProgress {
     status: 'progress' | 'complete' | 'error';
     message: string;
     report?: DoctorReport;
-    debug?: string; // JSON string
+    debug?: string;
 }
 
 export interface DoctorTaskState {
@@ -39,16 +39,13 @@ export interface DoctorTaskState {
 
 // --- Store ---
 
-// Map<cardId, TaskState>
 export const doctorTasks = writable<Record<string, DoctorTaskState>>({});
 
-// Keep controllers in a side-map to avoid store clutter/serializability issues (though stores can hold them)
 const controllers = new Map<string, AbortController>();
 
 // --- Actions ---
 
 export function startDiagnosis(cardId: string) {
-    // If already analyzing, do nothing (ui should handle picking up state)
     const current = get(doctorTasks)[cardId];
     if (current?.status === 'analyzing') {
         return;
@@ -126,15 +123,6 @@ export function startDiagnosis(cardId: string) {
                             // Update Store
                             doctorTasks.update(s => {
                                 const state = s[cardId] || { status: 'analyzing', message: '', report: null };
-
-                                // Debug Info persistence (optional, if UI wants to show log)
-                                // We merge it? Or replace? 
-                                // Since it's streaming, we might want to append logs if we had a log array.
-                                // For now, let's just keep 'last' debug info or better:
-                                // We can use console for detailed debug, and store just the messages for UI?
-                                // User requirement is console log (DONE).
-                                // Store status update:
-
                                 if (progress.status === 'progress') {
                                     return {
                                         ...s,
@@ -199,7 +187,6 @@ export function stopDiagnosis(cardId: string) {
         try {
             controller.abort();
         } catch {
-            // AbortError 是预期行为，静默处理
         }
         controllers.delete(cardId);
         doctorTasks.update(s => ({

@@ -199,10 +199,10 @@
         }
         details > summary { 
             cursor: pointer !important; 
-            list-style: none; /* Reset native marker style first to avoid conflicts */
+            list-style: none;
         }
         details > summary::-webkit-details-marker {
-            display: none; /* Hide default marker for custom styling if needed */
+            display: none;
         }
         /* Re-add a visible marker if AI doesn't provide one, or rely on AI providing one? 
            Let's just ensure it's clickable. If AI hides marker, that's fine. 

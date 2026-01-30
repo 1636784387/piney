@@ -188,30 +188,6 @@ pub fn calculate_card_tokens(json: &Value) -> TokenCounts {
 
     counts.total = collect_all_recursive(json, &mut total_values, bpe) as i32;
 
-    // 4. Other
-    // User formula: Total - Spec - WorldBook
-    // Note: This might be negative if there is overlap between Spec and WB (unlikely) or if my Total calculation logic (dedup all) differs from (Spec dedup + WB dedup).
-    // Actually, Spec set and WB set are separate. Total set is global.
-    // If a string "foo" appears in Spec AND WB,
-    // Spec count includes cost("foo").
-    // WB count includes cost("foo").
-    // Total count includes cost("foo") ONCE.
-    // Then Other = Cost("foo") - Cost("foo") - Cost("foo") = -Cost("foo").
-    // This formula implies Total should be Sum(Spec) + Sum(WB) + Sum(OtherUnique).
-    // User said "Total token: json in total token, duplicates not counted".
-    // User said "Other: Total - Spec - WB".
-    // This implies Total *should* cover Spec and WB.
-    // If Total dedups globally, and Spec/WB are subsets, then Total <= Sum(Spec) + Sum(WB) if there are overlaps.
-    // If there are no overlaps between Spec and WB, then Total >= Spec + WB.
-    // Let's assume typical case: Spec fields and WB fields are disjoint.
-    // But if they share a string value (e.g. "MyName"), Total will count it once, Spec once, WB zero.
-    // Then Other = 1 - 1 - 0 = 0.
-    // If Spec has "Hi", WB has "Hi". Spec=1, WB=1. Total=1. Other = 1 - 2 = -1.
-    // To avoid negative numbers, maybe we should calculate Other explicitly as "Tokens in JSON that are NOT in Spec fields AND NOT in WB fields"?
-    // But user gave the formula: "Other: Total - Setting - World Book".
-    // I will implement exactly that formula, but clamp to 0 if negative to avoid confusion? Or show negative as indication of high overlap?
-    // I'll clamp to 0.
-
     counts.other = std::cmp::max(0, counts.total - counts.spec - counts.wb);
 
     counts

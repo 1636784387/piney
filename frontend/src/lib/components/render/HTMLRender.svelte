@@ -91,19 +91,10 @@
              // Initial Load logic (or if not loaded yet)
              if (!srcifiedContent) {
                  srcifiedContent = createIframeContent(currentContent, useBlobUrl);
-                 // Note: createIframeContent doesn't take isDark as arg currently in new implementation,
-                 // it handles styles internally or via postMessage later?
-                 // Actually looking at new createIframeContent, it doesn't take isDark unless I add it.
-                 // But wait, the Style injection is basic. 
-                 // We might need to handle Dark Mode via postMessage inside the iframe script?
-                 // The Iframe.svelte logic relies on postMessage for updates.
              }
         }
     });
     
-    // Also watch for major mode changes that might require full reload (e.g. Blob vs raw)
-    // But for now, we stick to srcdoc usually.
-
     function handleMessage(event: MessageEvent) {
         if (event.data?.type === 'TH_ADJUST_IFRAME_HEIGHT' && event.data?.name === iframeId) {
             if (iframeRef) {

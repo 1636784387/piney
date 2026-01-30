@@ -13,7 +13,7 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
-use crate::entities::{character_card, setting, world_info};
+use crate::entities::{character_card, setting};
 
 #[derive(Serialize, FromQueryResult, Clone)]
 pub struct SimpleCard {
@@ -34,8 +34,8 @@ pub struct LuckyCardInfo {
 #[derive(Serialize, Clone)]
 pub struct DashboardStats {
     pub total_characters: u64,
-    pub total_world_info: u64,
-    pub total_tokens_k: f64,
+    pub total_theaters: u64,
+    pub total_images: u64,
     pub db_size_mb: f64,
     pub recent_cards: Vec<SimpleCard>,
     pub lucky_card: Option<LuckyCardInfo>,
@@ -65,29 +65,17 @@ pub async fn get_dashboard_stats(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let total_world_info = world_info::Entity::find()
+    // 小剧场总数
+    let total_theaters = crate::entities::theater::Entity::find()
         .count(&db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Token 总数
-    // 使用 SQL Sum
-    #[derive(FromQueryResult)]
-    struct TokenSumResult {
-        total: Option<i64>,
-    }
-
-    let token_sum: Option<TokenSumResult> = character_card::Entity::find()
-        .select_only()
-        .column_as(character_card::Column::TokenCountTotal.sum(), "total")
-        .filter(character_card::Column::DeletedAt.is_null())
-        .into_model::<TokenSumResult>()
-        .one(&db)
+    // 图片总数
+    let total_images = crate::entities::image::Entity::find()
+        .count(&db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let total_tokens_val = token_sum.and_then(|r| r.total).unwrap_or(0);
-    let total_tokens_k = (total_tokens_val as f64) / 1000.0;
 
     // 2. DB Size
     let db_path = Path::new("./data/piney.db");
@@ -122,9 +110,9 @@ pub async fn get_dashboard_stats(
 
     let stats = DashboardStats {
         total_characters,
-        total_world_info,
-        total_tokens_k: (total_tokens_k * 10.0).round() / 10.0, // Keeping 1 decimal
-        db_size_mb: (db_size_mb * 100.0).round() / 100.0,       // Keeping 2 decimals
+        total_theaters,
+        total_images,
+        db_size_mb: (db_size_mb * 100.0).round() / 100.0, // Keeping 2 decimals
         recent_cards,
         lucky_card,
         username: "Admin".to_string(), // TODO: Fetch from auth/user logic if available

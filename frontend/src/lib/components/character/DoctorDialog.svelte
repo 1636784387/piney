@@ -232,9 +232,6 @@
                 诊断结论：{report.conclusion}
             </p>
         </div>
-        
-        <!-- Re-run Button (Only for Current View context ideally, but ok here) -->
-        <!-- We can conditionally render this outside -->
     </div>
 {/snippet}
 

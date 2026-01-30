@@ -4,7 +4,7 @@
 # 极简 Dockerfile - 使用原生架构构建，GitHub Actions 原生 ARM64 Runner
 # ============================================================================
 
-# Stage 0: 从官方镜像获取预编译的 cargo-chef (节省 3-5 分钟编译时间)
+# Stage 0: 从官方镜像获取预编译的 cargo-chef
 FROM lukemathwalker/cargo-chef:latest-rust-slim-bookworm AS cargo-chef
 
 # Stage 1: Chef - 基础环境与工具安装

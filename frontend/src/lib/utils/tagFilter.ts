@@ -60,7 +60,7 @@ export function filterTagContent(text: string, tag: string): string {
     }
 
     for (const openTag of openStack) {
-        let nextTagPos = text.length; // Default to end of string
+        let nextTagPos = text.length;
 
         for (const pos of allTagStartPositions) {
             if (pos > openTag.index) {

@@ -5,6 +5,7 @@
     import { Separator } from "$lib/components/ui/separator/index.js";
     import { SidebarTrigger } from "$lib/components/ui/sidebar/index.js";
     import { breadcrumbs } from "$lib/stores/breadcrumb";
+    import UserAgreementModal from "$lib/components/UserAgreementModal.svelte";
 
     let { children } = $props();
 </script>
@@ -44,4 +45,6 @@
             {@render children()}
         </div>
     </Sidebar.Inset>
+
+    <UserAgreementModal />
 </Sidebar.Provider>

@@ -26,12 +26,7 @@
     }
 
     function handleUpdate() {
-        // Callback to parent to refresh list, or we assume onUpdate prop handles it?
-        // Logic in +page.svelte probably re-fetches list or updates local state.
-        // Assuming onUpdate accepts (id, patch) but here we might need full refresh if content changed?
-        // The dialog calls onUpdate() which we pass here.
-        // Actually history list refreshes on change.
-        onUpdate(history.id, null); // Trigger refresh
+        onUpdate(history.id, null);
     }
 </script>
 

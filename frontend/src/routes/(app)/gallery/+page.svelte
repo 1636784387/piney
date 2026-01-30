@@ -806,7 +806,7 @@
         <div class="relative flex-1 min-w-[200px]">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-                placeholder="搜索图片标题..."
+                placeholder="搜索图片标题、标签、分类、正向提示词..."
                 class="pl-10"
                 bind:value={searchQuery}
                 oninput={onSearchInput}

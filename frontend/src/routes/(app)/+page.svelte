@@ -4,7 +4,7 @@
     import * as Card from "$lib/components/ui/card";
     import { Button } from "$lib/components/ui/button";
     import { api, resolveUrl } from "$lib/api";
-    import { User, Book, Zap, Database, ArrowRight, Sparkles, Dices } from "lucide-svelte";
+    import { User, Database, ArrowRight, Dices, Drama, Images } from "lucide-svelte";
     import { goto } from "$app/navigation";
     import { toast } from "svelte-sonner";
     import { auth } from "$lib/stores/auth.svelte";
@@ -23,8 +23,8 @@
     }
     interface DashboardStats {
         total_characters: number;
-        total_world_info: number;
-        total_tokens_k: number;
+        total_theaters: number;
+        total_images: number;
         db_size_mb: number;
         recent_cards: SimpleCard[];
         lucky_card: LuckyCardInfo | null;
@@ -94,13 +94,6 @@
         if (diff < 86400 * 2) return "昨天";
         return d.toLocaleDateString();
     }
-
-    function formatTokenCount(k: number) {
-        if (!k) return { value: 0, unit: "K" };
-        if (k >= 10000000) return { value: (k / 1000000).toFixed(2), unit: "B" };
-        if (k >= 10000) return { value: (k / 1000).toFixed(2), unit: "M" };
-        return { value: k, unit: "K" };
-    }
 </script>
 
 <div class="container animate-in fade-in duration-700 py-8 space-y-10 max-w-7xl mx-auto">
@@ -128,40 +121,39 @@
             </div>
         </div>
 
-        <!-- Token 消耗 -->
+        <!-- 小剧场总数 -->
         <div class="group relative overflow-hidden rounded-2xl border bg-card p-4 sm:p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 min-h-[120px] sm:min-h-[160px] flex justify-between">
             <div class="flex flex-col justify-between z-10 w-full overflow-hidden">
-                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">角色卡总 Token</p>
+                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">小剧场总数</p>
                  <h3 class="text-2xl sm:text-4xl font-bold tracking-tight text-foreground flex items-baseline gap-1 whitespace-nowrap">
                     {#if loading} 
                         <span class="animate-pulse bg-muted rounded h-8 w-12 block"></span> 
                     {:else} 
-                        {@const t = formatTokenCount(stats?.total_tokens_k || 0)}
-                        {t.value} <span class="text-lg sm:text-2xl font-normal text-muted-foreground">{t.unit}</span>
+                        {stats?.total_theaters || 0}
                     {/if}
                  </h3>
                  <div class="text-[10px] sm:text-xs text-muted-foreground truncate font-medium">
-                     编织宇宙的代价
+                     演化宇宙的分支
                  </div>
             </div>
             <div class="flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform flex-shrink-0 ml-1 sm:ml-2">
-                <Zap class="h-5 w-5 sm:h-6 sm:w-6" />
+                <Drama class="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
         </div>
 
-        <!-- 世界书 -->
+        <!-- 图片总数 -->
         <div class="group relative overflow-hidden rounded-2xl border bg-card p-4 sm:p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 min-h-[120px] sm:min-h-[160px] flex justify-between">
             <div class="flex flex-col justify-between z-10 w-full overflow-hidden">
-                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">全局世界书</p>
+                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">图片总数</p>
                  <h3 class="text-2xl sm:text-4xl font-bold tracking-tight text-foreground flex items-baseline gap-1 whitespace-nowrap">
-                    {#if loading} <span class="animate-pulse bg-muted rounded h-8 w-12 block"></span> {:else} {stats?.total_world_info || 0} {/if}
+                    {#if loading} <span class="animate-pulse bg-muted rounded h-8 w-12 block"></span> {:else} {stats?.total_images || 0} {/if}
                  </h3>
                  <div class="text-[10px] sm:text-xs text-muted-foreground truncate font-medium">
-                     构建世界的基石
+                     定格瞬间的永恒
                  </div>
             </div>
             <div class="flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform flex-shrink-0 ml-1 sm:ml-2">
-                <Book class="h-5 w-5 sm:h-6 sm:w-6" />
+                <Images class="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
         </div>
 

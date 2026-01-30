@@ -3,7 +3,7 @@ export const createImage = (url: string): Promise<HTMLImageElement> =>
         const image = new Image()
         image.addEventListener('load', () => resolve(image))
         image.addEventListener('error', (error) => reject(error))
-        image.setAttribute('crossOrigin', 'anonymous') // needed to avoid cross-origin issues on CodeSandbox
+        image.setAttribute('crossOrigin', 'anonymous')
         image.src = url
     })
 
@@ -11,9 +11,6 @@ export function getRadianAngle(degreeValue: number) {
     return (degreeValue * Math.PI) / 180
 }
 
-/**
- * Returns the new bounding area of a rotated rectangle.
- */
 export function rotateSize(width: number, height: number, rotation: number) {
     const rotRad = getRadianAngle(rotation)
 
@@ -25,9 +22,6 @@ export function rotateSize(width: number, height: number, rotation: number) {
     }
 }
 
-/**
- * This function was adapted from the one in the Readme of https://github.com/DominicTobias/react-image-crop
- */
 export default async function getCroppedImg(
     imageSrc: string,
     pixelCrop: { x: number; y: number; width: number; height: number },
@@ -61,7 +55,6 @@ export default async function getCroppedImg(
     ctx.scale(flip.horizontal ? -1 : 1, flip.vertical ? -1 : 1)
     ctx.translate(-image.width / 2, -image.height / 2)
 
-    // draw rotated image
     ctx.drawImage(image, 0, 0)
 
     // croppedAreaPixels values are bounding box relative
@@ -80,7 +73,6 @@ export default async function getCroppedImg(
     // paste generated rotate image at the top left corner
     ctx.putImageData(data, 0, 0)
 
-    // As a Blob
     return new Promise((resolve, reject) => {
         canvas.toBlob((file) => {
             resolve(file)

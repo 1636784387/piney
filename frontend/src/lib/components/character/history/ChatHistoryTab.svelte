@@ -39,7 +39,6 @@
     function handleDelete(id: string) {
         if (!confirm("确定要删除这条记录吗？删除后不可恢复。")) return;
         
-        // Optimistic update
         const prev = [...histories];
         histories = histories.filter(h => h.id !== id);
 
@@ -60,12 +59,9 @@
 
     function handleUpdate(id: string, payload: any) {
         if (payload === null) {
-            // Reload list (e.g. after content update or simple refresh)
             loadHistories();
             return;
         }
-
-        // Optimistic update
         const idx = histories.findIndex(h => h.id === id);
         if (idx === -1) return;
         
@@ -87,7 +83,6 @@
     }
 
     function onImport(newItems: any[]) {
-        // Prepend new items
         histories = [...newItems, ...histories];
     }
 </script>

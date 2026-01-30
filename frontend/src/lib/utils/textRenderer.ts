@@ -45,7 +45,7 @@ export function renderContent(text: string, cardRegex: RegexScript[] = []): stri
 
     // 移除危险元素 (仅保留基本沙箱安全，允许 script 以支持动态效果)
     // container.querySelectorAll('iframe, object, embed, form').forEach(el => el.remove());
-    // 移除 on* (已被用户要求开启 JS，所以不再移除)
+    // 移除 on*
 
     // 7. 文本节点解析 (Markdown 语法 & 全局换行)
     processTextNodes(container);

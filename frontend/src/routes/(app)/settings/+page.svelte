@@ -219,12 +219,113 @@
         <!-- About Tab -->
         <TabsContent value="about">
             <Card.Root>
-                <Card.Header>
-                    <Card.Title>关于 Piney</Card.Title>
-                </Card.Header>
-                <Card.Content>
-                    <div class="text-center text-muted-foreground py-10 border-2 border-dashed rounded-lg">
-                        内容还在想
+                <Card.Content class="flex flex-col items-center py-8 space-y-8">
+                    <!-- Logo & Header -->
+                    <div class="flex flex-col items-center">
+                        <div class="relative mb-6 group">
+                            <div class="absolute inset-0 bg-primary/20 blur-xl rounded-full transform rotate-6 group-hover:rotate-12 transition-all duration-500 opacity-0 group-hover:opacity-100"></div>
+                            <img 
+                                src="/logo.png" 
+                                alt="Piney Logo" 
+                                class="relative w-32 h-32 rounded-3xl shadow-2xl rotate-6 group-hover:rotate-0 transition-all duration-500 ease-out bg-white dark:bg-zinc-900/50 p-1 backdrop-blur-sm ring-1 ring-border/50" 
+                            />
+                        </div>
+                        
+                        <h2 class="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/50 bg-clip-text text-transparent mb-2">小兄许 / Piney</h2>
+                        <Badge variant="secondary" class="font-mono text-xs px-2 py-0.5 border-primary/20">v0.0.2</Badge>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="max-w-2xl text-center text-xs text-muted-foreground leading-relaxed px-6 py-4 bg-muted/40 rounded-lg border border-border/50 font-mono">
+                        SillyTavern角色卡工作站，支持角色卡/世界书/正则/美化/图库的创建、导入、编辑、修改功能。
+                    </div>
+
+                    <!-- Socials -->
+                    <div class="flex flex-col items-center gap-3 mt-2">
+                        <p class="text-sm font-medium text-muted-foreground">欢迎加入小酒窝</p>
+                        <div class="flex gap-3">
+                            <a href="https://jiuwo.me" target="_blank">
+                                <Button variant="outline" size="sm" class="gap-2">
+                                    <svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4"><path d="M512 1024H0V512C0 230.4 230.4 0 512 0s512 230.4 512 512-230.4 512-512 512z" fill="#000000" class="dark:fill-white"></path><path d="M386.56 765.44l-199.68 71.68L222.72 640c-25.6-40.96-43.52-87.04-51.2-138.24-20.48-174.08 102.4-330.24 273.92-350.72s330.24 102.4 350.72 273.92-102.4 330.24-273.92 350.72c-46.08 7.68-92.16 2.56-135.68-10.24z" fill="#E4001E"></path><path d="M399.36 811.52l-209.92 25.6 79.36-184.32c-17.92-43.52-23.04-94.72-17.92-145.92 17.92-174.08 174.08-299.52 348.16-281.6s299.52 174.08 281.6 348.16-174.08 299.52-348.16 281.6c-51.2-5.12-94.72-20.48-133.12-43.52z" fill="#00B0F5"></path><path d="M186.88 837.12l58.88-189.44c-20.48-43.52-33.28-92.16-33.28-143.36 0-174.08 140.8-314.88 314.88-314.88S844.8 330.24 844.8 504.32 704 819.2 529.92 819.2c-48.64 0-94.72-10.24-135.68-30.72l-207.36 48.64z" fill="#FF5B00"></path><path d="M186.88 837.12l79.36-184.32c-17.92-43.52-23.04-94.72-17.92-145.92 17.92-174.08 174.08-299.52 348.16-281.6 74.24 7.68 138.24 40.96 186.88 87.04 38.4 53.76 61.44 117.76 61.44 189.44C844.8 678.4 704 819.2 529.92 819.2c-48.64 0-94.72-10.24-135.68-30.72l-207.36 48.64z" fill="#00AD42"></path><path d="M186.88 837.12l79.36-184.32c-17.92-43.52-23.04-94.72-17.92-145.92 17.92-174.08 174.08-299.52 348.16-281.6 56.32 5.12 107.52 25.6 151.04 56.32 28.16 40.96 48.64 89.6 53.76 143.36 20.48 174.08-102.4 330.24-273.92 350.72-48.64 5.12-94.72 0-138.24-12.8l-202.24 74.24z" fill="#FFF9A4"></path></svg>
+                                    小酒窝论坛
+                                </Button>
+                            </a>
+                            <a href="https://discord.gg/atsXVr7ve8" target="_blank">
+                                <Button variant="outline" size="sm" class="gap-2">
+                                    <svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4"><path d="M404.906935 471.06782A61.822209 61.822209 0 0 0 348.744505 535.937603a61.822209 61.822209 0 0 0 57.9039 65.305151 61.822209 61.822209 0 0 0 58.339268-65.305151 61.386842 61.386842 0 0 0-60.080738-64.869783zM619.543196 471.06782a61.822209 61.822209 0 0 0-57.9039 64.869783 61.822209 61.822209 0 0 0 57.9039 65.305151 61.822209 61.822209 0 0 0 58.339268-65.305151 61.386842 61.386842 0 0 0-58.339268-64.869783z" fill="#5866f2" p-id="7653"></path><path d="M512.007382 0a511.992381 511.992381 0 1 0 511.992381 511.557013A511.557013 511.557013 0 0 0 512.007382 0z m320.430606 674.384522a531.583926 531.583926 0 0 1-161.521406 81.413755h-2.176839a421.435906 421.435906 0 0 1-33.087943-53.550224v-2.612206a354.389284 354.389284 0 0 0 50.067282-24.380589v-3.047574a91.862579 91.862579 0 0 1-10.013456-8.271986 381.817447 381.817447 0 0 1-324.784283 0l-10.013456 7.836618v3.047574a337.845313 337.845313 0 0 0 50.50265 24.38059v2.612206a377.028403 377.028403 0 0 1-33.087943 53.550223h-2.176838a534.6315 534.6315 0 0 1-161.086039-81.413754 545.080324 545.080324 0 0 1 92.297947-367.014947 556.399884 556.399884 0 0 1 130.610301-40.924561 341.763622 341.763622 0 0 1 16.543971 33.523311 493.271571 493.271571 0 0 1 147.589641 0 341.763622 341.763622 0 0 1 16.543971-33.523311 2.176838 2.176838 0 0 1 2.176839 0 556.399884 556.399884 0 0 1 130.610301 40.924561 541.597383 541.597383 0 0 1 101.0053 367.450314z" fill="#5866f2" p-id="7654"></path></svg>
+                                    小酒窝-DC分窝
+                                </Button>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 text-sm mt-4">
+                        <!-- Credits -->
+                        <div class="space-y-4 p-6 rounded-xl bg-muted/30 border border-muted/50">
+                            <h3 class="font-semibold text-lg flex items-center gap-2 text-foreground">
+                                <Sparkles class="w-4 h-4 text-amber-500" /> 致谢
+                            </h3>
+                            <ul class="space-y-4">
+                                <li class="group">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-medium text-foreground group-hover:text-primary transition-colors">@我不理解</span>
+                                        <Badge variant="outline" class="text-[10px] h-4">技术支持</Badge>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground mt-1 leading-relaxed">小红书号：8032060592，感谢老师为项目提供的大量技术支持，有兴趣的话可以关注一波老师。</p>
+                                </li>
+                                <li class="group">
+                                    <span class="font-medium text-foreground group-hover:text-primary transition-colors">@随风飘逸</span>
+                                    <Badge variant="outline" class="text-[10px] h-4">肘击我</Badge>
+                                    <p class="text-xs text-muted-foreground mt-1 leading-relaxed">因为随风的肘击，于是有了聊天记录的“随风模式”和“图库”功能。</p>
+                                </li>
+                                <li class="group">
+                                    <span class="font-medium text-foreground group-hover:text-primary transition-colors">@薯片</span>
+                                    <Badge variant="outline" class="text-[10px] h-4">模板提供</Badge>
+                                    <p class="text-xs text-muted-foreground mt-1 leading-relaxed">感谢薯片提供的角色卡写卡模板。</p>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Teachers -->
+                        <div class="space-y-4 p-6 rounded-xl bg-muted/30 border border-muted/50">
+                            <h3 class="font-semibold text-lg flex items-center gap-2 text-foreground">
+                                <BrainCircuit class="w-4 h-4 text-purple-500" /> 感谢老师
+                            </h3>
+                            <ul class="space-y-4">
+                                <li class="group">
+                                    <div class="font-medium text-foreground group-hover:text-primary transition-colors">@KAKAA @青空莉想做舞台少女的狗</div>
+                                    <a href="https://n0vi028.github.io/JS-Slash-Runner-Doc/" target="_blank" class="text-xs text-primary/80 hover:text-primary hover:underline mt-1 block">
+                                        酒馆助手 ↗
+                                    </a>
+                                    <p class="text-xs text-muted-foreground mt-0.5">深刻学习了怎么渲染聊天记录，但是能力有限没怎么学会 T_T。</p>
+                                </li>
+                                <li class="group">
+                                    <div class="font-medium text-foreground group-hover:text-primary transition-colors">@lucialili</div>
+                                    <a href="https://discord.com/channels/1291925535324110879/1455494729763393713" target="_blank" class="text-xs text-primary/80 hover:text-primary hover:underline mt-1 block">
+                                        SillyReader-旅程 ↗
+                                    </a>
+                                    <p class="text-xs text-muted-foreground mt-0.5">学习了一下jsonl格式聊天记录中检索标签对的逻辑。</p>
+                                </li>
+                                <li class="group">
+                                    <div class="font-medium text-foreground group-hover:text-primary transition-colors">@温柔半两</div>
+                                    <a href="https://discord.com/channels/1379304008157499423/1463927945184673822/1463927945184673822" target="_blank" class="text-xs text-primary/80 hover:text-primary hover:underline mt-1 block">
+                                        角色卡百宝箱-尾巴镇 ↗
+                                    </a>
+                                    <p class="text-xs text-muted-foreground mt-0.5">得到了添加"小剧场"存储的灵感。</p>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Footer & Agreement -->
+                    <div class="pt-8 w-full border-t flex flex-col items-center gap-3 mt-4">
+                         <a href="/agreement" class="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+                            用户协议
+                        </a>
+                        
+                        <div class="text-[10px] font-mono tracking-wider uppercase">
+                            Made with ❤️ by <a href="" class="hover:text-primary transition-colors">laopobao</a>
+                        </div>
                     </div>
                 </Card.Content>
             </Card.Root>

@@ -17,7 +17,6 @@
 
     let { open = $bindable(false), history, cardId, onUpdate } = $props();
 
-    // Strip extension for display
     // svelte-ignore state_referenced_locally
     let name = $state(history.display_name.replace(/\.(txt|jsonl)$/i, ''));
     let isProcessing = $state(false);
@@ -30,7 +29,6 @@
 
     // Regex State
     let regexScripts: any[] = $state([]);
-    // Character name for export filename
     let characterName = ""; 
     
     // Delete Confirmation State
@@ -48,10 +46,8 @@
     $effect(() => {
         if (open && history.id) {
             untrack(() => {
-                // Strip extension for display whenever dialog opens
                 name = history.display_name.replace(/\.(txt|jsonl)$/i, '');
                 step = 'main';
-                // Parse regex scripts
                 try {
                     regexScripts = JSON.parse(history.regex_scripts || "[]");
                 } catch {
@@ -87,7 +83,7 @@
             const text = await res.text();
             rawSource = text;
             availableTags = scanTags(text);
-            selectedTags = [...availableTags]; // Default select all
+            selectedTags = [...availableTags];
             step = 'tags';
         } catch (e) {
             toast.error("无法获取源文件，可能源文件不存在");
@@ -133,9 +129,7 @@
         });
         if (!res.ok) throw new Error("Failed to auto-save regex");
         
-        // Update local object to prevent stale updates from parent
         history.regex_scripts = JSON.stringify(scripts);
-        // onUpdate(); // Removing this to prevent dialog close/refresh on auto-save
     }
 
     // Dnd Handlers
@@ -179,7 +173,6 @@
                 } else if (data.data?.extensions?.regex_scripts && Array.isArray(data.data.extensions.regex_scripts)) {
                      fileScripts = data.data.extensions.regex_scripts;
                 } else if (data.scriptName && data.findRegex) {
-                     // Single script object
                      fileScripts = [data];
                 } else {
                      errorCount++;
@@ -189,8 +182,6 @@
                 // Parse scripts in this file
                 for (const s of fileScripts) {
                     if (s.scriptName && s.findRegex) {
-                        // Check for duplicates
-                        // If the script has an ID and it's already in our list, it's a duplicate.
                         if (s.id && existingIds.has(s.id)) {
                             duplicateCount++;
                             continue;
@@ -203,15 +194,10 @@
                             continue;
                         }
 
-                        // Not a duplicate, add to list
+                        // Treat imports as new local copies with unique IDs to avoid potential collisions
                         const newScript = {
                             ...s,
-                            id: generateUUID() // Always generate new ID internally to act as local key, unless we want to preserve exact ID? 
-                                               // User said "according to id", so maybe if ID matched we skipped (already done). 
-                                               // But for new script, we should probably ensure it has a unique ID in our system.
-                                               // If we use the imported ID, it might clash later if user imports same file again.
-                                               // But we just checked collisions. So it's safe to generate new ID or keep existing if unique.
-                                               // Let's generate new ID to be safe and consistent, treating import as "copy".
+                            id: generateUUID()
                         };
                         newScripts.push(newScript);
                         
@@ -227,7 +213,6 @@
         }
         
         if (newScripts.length > 0) {
-            // Append to existing
             const combined = [...regexScripts, ...newScripts];
             
             // Sort by scriptName (numeric + Chinese Pinyin support)
@@ -257,10 +242,8 @@
 
     function deleteScript(id: string) {
         if (dontAskDelete) {
-            // Direct delete
             performDelete(id);
         } else {
-            // Show dialog
             pendingDeleteId = id;
             showDeleteDialog = true;
         }
