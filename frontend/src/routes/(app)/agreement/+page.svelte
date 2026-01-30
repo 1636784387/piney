@@ -16,6 +16,7 @@
     import { auth } from "$lib/stores/auth.svelte";
     import { toast } from "svelte-sonner";
     import { goto } from "$app/navigation";
+    import { breadcrumbs } from "$lib/stores/breadcrumbs.svelte";
 
     let timeLeft = $state(10);
     let hasScrolledToBottom = $state(false);
@@ -28,6 +29,9 @@
     });
 
     onMount(() => {
+        // 设置面包屑
+        breadcrumbs.set([{ label: '用户协议' }]);
+        
         const timer = setInterval(() => {
             if (timeLeft > 0) {
                 timeLeft--;

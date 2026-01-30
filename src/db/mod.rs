@@ -8,21 +8,22 @@ use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statemen
 use sea_orm_migration::MigratorTrait;
 use tracing::info;
 
-/// 检测并清理旧版迁移记录
+/// 检测并清理旧版或不完整的迁移记录
 ///
-/// 如果检测到 seaql_migrations 表中存在旧版迁移记录（非 m000001 开头），
-/// 自动清空这些记录，让新的 v1 合并脚本可以正常运行。
+/// 处理以下情况：
+/// 1. 存在旧版迁移记录（非 m000001 开头）- 清空让新脚本运行
+/// 2. 存在 m000001 记录但缺少必要的表 - 清空让新脚本重新运行以补全缺失表
 async fn auto_upgrade_migrations(db: &DatabaseConnection) -> anyhow::Result<()> {
     // 检查 seaql_migrations 表是否存在
-    let table_exists = db
-        .execute(Statement::from_string(
+    let migrations_table_exists = db
+        .query_one(Statement::from_string(
             DbBackend::Sqlite,
             "SELECT name FROM sqlite_master WHERE type='table' AND name='seaql_migrations';"
                 .to_owned(),
         ))
-        .await;
+        .await?;
 
-    if table_exists.is_err() {
+    if migrations_table_exists.is_none() {
         return Ok(()); // 表不存在，是全新数据库，无需清理
     }
 
@@ -48,6 +49,38 @@ async fn auto_upgrade_migrations(db: &DatabaseConnection) -> anyhow::Result<()> 
         .await?;
 
         info!("✅ 旧版迁移记录已清理，将使用新的合并脚本");
+        return Ok(());
+    }
+
+    // 检查是否存在 m000001 记录但缺少必要的表（不完整的迁移）
+    let v1_migration = db
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT version FROM seaql_migrations WHERE version LIKE 'm000001%';".to_owned(),
+        ))
+        .await?;
+
+    if v1_migration.is_some() {
+        // 检查 theaters 表是否存在（作为新表的代表）
+        let theaters_exists = db
+            .query_one(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='theaters';".to_owned(),
+            ))
+            .await?;
+
+        if theaters_exists.is_none() {
+            info!("🔧 检测到不完整的 v1 迁移（缺少 theaters 表），正在修复...");
+
+            // 清空迁移记录，让新脚本重新运行以创建缺失的表
+            db.execute(Statement::from_string(
+                DbBackend::Sqlite,
+                "DELETE FROM seaql_migrations;".to_owned(),
+            ))
+            .await?;
+
+            info!("✅ 迁移记录已清理，新脚本将补全缺失的表");
+        }
     }
 
     Ok(())

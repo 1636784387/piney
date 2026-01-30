@@ -1,7 +1,7 @@
 //! 数据库初始化脚本 v1.0.0
 //!
 //! 合并了所有开发阶段的迁移脚本，创建完整的数据库结构。
-//! 对于老用户：检测到表已存在时会跳过建表，保留原有数据。
+//! 所有表使用 if_not_exists，确保老用户也能获得缺失的新表。
 
 use sea_orm_migration::prelude::*;
 
@@ -12,16 +12,15 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // 检测是否为老用户（数据库已存在）
-        let has_tables = manager.has_table("character_cards").await?;
+        let is_existing_db = manager.has_table("character_cards").await?;
 
-        if has_tables {
-            // 老用户：表已存在，跳过建表，保留原有数据
-            println!("🔄 检测到现有数据库，跳过初始化建表，保留原有数据。");
-            return Ok(());
+        if is_existing_db {
+            println!("🔄 检测到现有数据库，将检查并创建缺失的表...");
+        } else {
+            println!("🆕 首次初始化，创建数据库结构...");
         }
 
-        // 新用户：创建所有表
-        println!("🆕 首次初始化，创建数据库结构...");
+        // 创建所有表（使用 if_not_exists，已存在的表会安全跳过）
 
         // ==================== settings ====================
         manager
@@ -141,7 +140,7 @@ impl MigrationTrait for Migration {
         // character_cards 索引
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_character_cards_data_hash")
                     .table(CharacterCards::Table)
                     .col(CharacterCards::DataHash)
@@ -151,7 +150,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_character_cards_token_sum")
                     .table(CharacterCards::Table)
                     .col(CharacterCards::DeletedAt)
@@ -162,7 +161,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_character_cards_updated")
                     .table(CharacterCards::Table)
                     .col(CharacterCards::DeletedAt)
@@ -404,7 +403,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_quick_replies_card_id")
                     .table(QuickReplies::Table)
                     .col(QuickReplies::CardId)
@@ -436,7 +435,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_theaters_category")
                     .table(Theaters::Table)
                     .col(Theaters::Category)
@@ -446,7 +445,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_theaters_sort")
                     .table(Theaters::Table)
                     .col(Theaters::UpdatedAt)
@@ -514,7 +513,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_frontend_style_name")
                     .table(FrontendStyle::Table)
                     .col(FrontendStyle::Name)
@@ -524,7 +523,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_frontend_style_sort")
                     .table(FrontendStyle::Table)
                     .col(FrontendStyle::UpdatedAt)
@@ -566,7 +565,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_image_category_sort")
                     .table(ImageCategory::Table)
                     .col(ImageCategory::SortOrder)
@@ -631,7 +630,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_image_category_id")
                     .table(Image::Table)
                     .col(Image::CategoryId)
@@ -641,7 +640,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_image_favorite")
                     .table(Image::Table)
                     .col(Image::IsFavorite)
@@ -651,7 +650,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_image_color")
                     .table(Image::Table)
                     .col(Image::ColorCategory)
@@ -661,7 +660,7 @@ impl MigrationTrait for Migration {
 
         manager
             .create_index(
-                Index::create()
+                Index::create().if_not_exists()
                     .name("idx_image_created_at")
                     .table(Image::Table)
                     .col(Image::CreatedAt)
