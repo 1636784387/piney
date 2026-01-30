@@ -95,13 +95,15 @@
 
 <div class="container max-w-4xl py-8 mx-auto h-[calc(100vh-4rem)] flex flex-col">
     <div class="flex-1 flex flex-col bg-background/95 backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden">
-        <div class="p-8 pb-4 border-b bg-muted/20 shrink-0">
-            <div class="mx-auto bg-primary/10 p-3 rounded-full mb-4 w-16 h-16 flex items-center justify-center">
-                <ShieldCheck class="w-8 h-8 text-primary" />
+        <div class="p-5 pb-3 border-b bg-muted/20 shrink-0">
+            <div class="flex items-center justify-center gap-3">
+                 <div class="bg-primary/10 p-2 rounded-full w-10 h-10 flex items-center justify-center">
+                    <ShieldCheck class="w-5 h-5 text-primary" />
+                </div>
+                <h1 class="text-2xl font-bold tracking-tight">用户使用协议</h1>
             </div>
-            <h1 class="text-3xl font-bold text-center tracking-tight">用户使用协议</h1>
-            <div class="text-center text-base mt-2 flex items-center justify-center gap-2">
-                <Badge variant="outline" class="px-3 py-1">版本日期：2026年1月30日</Badge>
+            <div class="text-center text-sm mt-3 flex items-center justify-center gap-2">
+                <Badge variant="outline" class="px-2.5 py-0.5 text-xs text-muted-foreground font-normal">版本日期：2026年1月30日</Badge>
             </div>
         </div>
 
