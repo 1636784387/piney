@@ -376,9 +376,29 @@
                     user_notes: editingImage.user_notes,
                 }),
             });
+            
+            // 立即更新本地状态，让 UI 即时反映变化
+            const editedId = editingImage.id;
+            const updatedFields = {
+                title: editingImage.title,
+                category_id: editingImage.category_id,
+                tags: editingImage.tags,
+                is_ai: editingImage.is_ai,
+                ai_platform: editingImage.ai_platform,
+                ai_prompt: editingImage.ai_prompt,
+                ai_negative_prompt: editingImage.ai_negative_prompt,
+                is_authorized: editingImage.is_authorized,
+                user_notes: editingImage.user_notes,
+            };
+            images = images.map(img => 
+                img.id === editedId ? { ...img, ...updatedFields } : img
+            );
+            
+            // 清除缓存，下次切换筛选条件时重新加载
+            imageCache.clear();
+            
             toast.success("保存成功");
             editDialogOpen = false;
-            await fetchImages();
         } catch (e) {
             toast.error("保存失败");
         }
