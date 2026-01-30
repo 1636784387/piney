@@ -3,6 +3,7 @@ name: Build and Push Docker Image
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -114,6 +115,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=edge,enable=${{ github.event_name == 'workflow_dispatch' }}
       
       - name: Create manifest list and push
         working-directory: /tmp/digests

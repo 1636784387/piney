@@ -306,6 +306,7 @@
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             await fetchCategories();
+            imageCache.clear();
             await fetchImages();
             toast.success("分类已删除");
         } catch (e) {
@@ -413,6 +414,7 @@
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             toast.success("删除成功");
+            imageCache.clear();
             await fetchImages();
         } catch (e) {
             toast.error("删除失败");
@@ -450,6 +452,7 @@
                 toast.success("已批量删除");
                 selectedImageIds = new Set();
                 isSelectionMode = false;
+                imageCache.clear();
                 fetchImages();
             } else {
                 toast.error("批量删除失败");
@@ -489,6 +492,7 @@
                 moveDialogOpen = false;
                 selectedImageIds = new Set();
                 isSelectionMode = false;
+                imageCache.clear();
                 fetchImages();
             } else {
                 toast.error("移动分类失败");
@@ -563,6 +567,7 @@
             });
             if (res.ok) {
                 toast.success("已批量设置已获许可");
+                imageCache.clear();
                 fetchImages(); 
                 // 保持选择状态以便用户确认
             } else {
@@ -635,6 +640,8 @@
             if (res.ok) {
                 const data = await res.json();
                 toast.success(`成功导入 ${data.imported} 张图片`);
+                imageCache.clear();
+                currentPage = 1;
                 await fetchImages();
             } else {
                 const error = await res.json();
