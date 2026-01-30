@@ -58,7 +58,6 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           platforms: ${{ matrix.platform }}
-          push: true
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
