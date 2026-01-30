@@ -124,6 +124,7 @@
                     <AlertCircle class="h-4 w-4 shrink-0 mt-0.5" />
                     <div class="text-xs space-y-1">
                         <p>仅支持 TXT 格式，每个小剧场格式如下：</p>
+                        <p>（酒馆中推荐使用<a href="https://discord.com/channels/1291925535324110879/1449044528408428676/0" target="_blank" class="text-primary underline underline-offset-2 decoration-1 hover:decoration-blue-400 transition-all"> 回声小剧场 - 旅程社区获取</a>）</p>
                         <pre class="bg-muted p-2 rounded text-[10px] leading-relaxed overflow-x-auto">### Title
 Title: [标题]
 Category: [分类]

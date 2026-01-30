@@ -172,6 +172,18 @@
                 });
             <\/script>
         ` : '';
+
+        // 自动高度调整脚本
+        const resizeScript = `
+            <script>
+                const resizeObserver = new ResizeObserver(() => {
+                    // 发送高度信息（加一点 buffer 防止闪烁）
+                    const height = document.documentElement.scrollHeight;
+                    window.parent.postMessage({ type: 'resize', height: height }, '*');
+                });
+                resizeObserver.observe(document.body);
+            <\/script>
+        `;
         
         // 编辑模式使用十字光标指针
         const editModeStyle = editMode ? `
@@ -189,6 +201,7 @@
             margin: 0; 
             padding: 16px; 
             font-family: system-ui, sans-serif;
+            overflow-y: hidden; /* 防止 iframe 内部双重滚动 */
         }
         
         /* 强制修复 details/summary 交互 */
@@ -217,7 +230,7 @@
         ${editModeStyle}
     </style>
 </head>
-<body>${htmlCode}${editModeScript}</body>
+<body>${htmlCode}${editModeScript}${resizeScript}</body>
 </html>`;
     });
     
@@ -363,6 +376,17 @@
             <\/script>
         ` : '';
         
+        // 自动高度调整脚本
+        const resizeScript = `
+            <script>
+                const resizeObserver = new ResizeObserver(() => {
+                    const height = document.documentElement.scrollHeight;
+                    window.parent.postMessage({ type: 'resize', height: height }, '*');
+                });
+                resizeObserver.observe(document.body);
+            <\/script>
+        `;
+        
         const editModeStyle = (editMode && renderMode === 'code') ? `* { cursor: crosshair !important; }` : '';
         
         return `<!DOCTYPE html>
@@ -376,11 +400,19 @@
             margin: 0; 
             padding: 16px; 
             font-family: system-ui, sans-serif;
+            overflow-y: hidden;
         }
+        
+        details, summary { display: block; pointer-events: auto !important; }
+        details > summary { cursor: pointer !important; list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        *:where(button, a, input, select, textarea, details, summary) { pointer-events: auto !important; }
+        details > summary:hover { opacity: 0.8; }
+        
         ${editModeStyle}
     </style>
 </head>
-<body>${renderedContent}${editModeScript}</body>
+<body>${renderedContent}${editModeScript}${resizeScript}</body>
 </html>`;
     });
     
@@ -873,8 +905,13 @@
 ${info.outerHTML}`;
             
             toast.success(`已选中 #${tagLower}`);
+        } else if (event.data?.type === 'resize') {
+            iframeHeight = Math.max(400, event.data.height + 20); // 最小高度 400，并添加缓冲
         }
     }
+    
+    // iframe 高度状态
+    let iframeHeight = $state(600);
     
     // 初始化
     onMount(() => {
@@ -906,12 +943,13 @@ ${info.outerHTML}`;
 
 <div class="flex flex-col h-full">
     <!-- 顶栏 -->
-    <div class="flex items-center justify-between px-6 py-4 border-b bg-card">
+    <!-- 顶栏 -->
+    <div class="flex flex-col gap-3 px-4 py-4 border-b bg-card sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
-            <h1 class="text-2xl font-bold">皮皮美化工作台</h1>
-            <p class="text-sm text-muted-foreground">AI 驱动的前端样式生成系统，一次性生成样式、正则和世界书</p>
+            <h1 class="text-xl font-bold sm:text-2xl">皮皮美化工作台</h1>
+            <p class="text-sm text-muted-foreground hidden sm:block">AI 驱动的前端样式生成系统，一次性生成样式、正则和世界书</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
             <Button variant="outline" size="sm" onclick={handleNew}>
                 <Plus class="w-4 h-4 mr-1" />
                 新建
@@ -928,9 +966,9 @@ ${info.outerHTML}`;
     </div>
     
     <!-- 主内容区：两栏布局 -->
-    <div class="flex flex-1 overflow-hidden">
+    <div class="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
         <!-- 左侧栏：控制台 -->
-        <div class="w-[400px] border-r flex flex-col bg-muted/30">
+        <div class="w-full lg:w-[400px] min-h-[60vh] lg:h-full border-b lg:border-b-0 lg:border-r flex flex-col bg-muted/30 shrink-0">
             <!-- 标题 -->
             <div class="px-4 py-3 border-b flex items-center gap-2">
                 <Sparkles class="w-4 h-4 text-primary" />
@@ -1033,7 +1071,7 @@ ${info.outerHTML}`;
         </div>
         
         <!-- 右侧栏：预览/AI输出 -->
-        <div class="flex-1 flex flex-col overflow-hidden">
+        <div class="flex-1 w-full lg:w-auto h-auto lg:h-full shrink-0 flex flex-col overflow-visible lg:overflow-hidden">
             <Tabs.Root bind:value={activeTab} class="flex-1 flex flex-col">
                 <!-- Tab 头部 -->
                 <div class="flex items-center justify-between px-4 py-2 border-b">
@@ -1063,7 +1101,7 @@ ${info.outerHTML}`;
                 </div>
                 
                 <!-- Tab 内容 -->
-                <Tabs.Content value="preview" class="flex-1 overflow-hidden m-0 p-0 relative">
+                <Tabs.Content value="preview" class="flex-1 overflow-visible lg:overflow-hidden m-0 p-0 relative min-h-[500px]">
                     {#if htmlCode.trim()}
                         <!-- 渲染模式切换浮窗 -->
                         <div class="absolute top-3 right-3 z-10 backdrop-blur-md bg-background/30 border rounded-lg shadow-lg p-1 flex gap-1">
@@ -1100,7 +1138,8 @@ ${info.outerHTML}`;
                         <iframe 
                             bind:this={previewIframe}
                             srcdoc={finalPreviewSrcDoc}
-                            class="w-full h-full border-0"
+                            class="w-full lg:!h-full border-0 transition-all duration-300"
+                            style="height: {iframeHeight}px"
                             title="预览"
                             sandbox="allow-scripts"
                         ></iframe>
@@ -1206,7 +1245,7 @@ ${info.outerHTML}`;
 
     <!-- 样式库 Sheet -->
     <Sheet.Root bind:open={libraryOpen}>
-        <Sheet.Content side="right" class="w-[400px] flex flex-col p-0 gap-0">
+        <Sheet.Content side="right" class="w-[70%] sm:w-[400px] flex flex-col p-0 gap-0">
             <Sheet.Header class="px-6 py-4 border-b">
                 <Sheet.Title>样式库</Sheet.Title>
                 <Sheet.Description>管理您保存的样式预设</Sheet.Description>

@@ -124,7 +124,7 @@
 
     <div class="relative group/textarea">
         {#if aiFeature}
-            <div class="absolute top-2 right-8 z-20 opacity-100 lg:opacity-0 lg:group-hover/textarea:opacity-100 transition-opacity duration-200">
+            <div class="absolute top-2 right-2 z-20 opacity-100 lg:opacity-0 lg:group-hover/textarea:opacity-100 transition-opacity duration-200">
                 <TextAiActions bind:value feature={aiFeature} />
             </div>
         {/if}
@@ -132,7 +132,7 @@
             bind:value
             {placeholder}
             class={cn(
-                "resize-none transition-all duration-300 min-h-[80px] pr-12",
+                "resize-none transition-all duration-300 min-h-[80px]",
                 "bg-background/50 border ring-1 ring-border/50 focus-visible:ring-primary/50",
                 isDirty &&
                     "border-amber-500/50 focus-visible:ring-amber-500/50 bg-amber-500/5"

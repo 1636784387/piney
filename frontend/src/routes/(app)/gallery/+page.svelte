@@ -1040,6 +1040,7 @@
                                         alt={image.title}
                                         class="w-full object-cover"
                                         loading="lazy"
+                                        decoding="async"
                                     />
                                     
                                     <!-- 悬浮操作 -->
@@ -1203,59 +1204,79 @@
 
         <!-- 底部批量操作栏 -->
         {#if isSelectionMode && selectedImageIds.size > 0}
-            <div
-                class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-popover border shadow-lg rounded-full px-6 py-3 flex items-center gap-4 animate-in slide-in-from-bottom z-50"
-            >
-                <div class="text-sm font-medium">
-                    已选择 {selectedImageIds.size} 项
-                </div>
-                <div class="h-4 w-px bg-border"></div>
+            <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[92%] sm:w-auto">
+                <div class="bg-popover/95 backdrop-blur border shadow-xl rounded-2xl sm:rounded-full p-3 sm:px-6 sm:py-3 flex flex-col sm:flex-row items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom duration-300">
+                    
+                    <!-- Top Row (Mobile): Count + Cancel -->
+                    <div class="flex items-center justify-between w-full sm:w-auto sm:gap-4">
+                        <span class="text-sm font-medium whitespace-nowrap pl-1">已选择 {selectedImageIds.size} 项</span>
+                         <Button
+                            variant="ghost"
+                            size="sm"
+                            class="h-8 text-muted-foreground sm:hidden"
+                            onclick={() => {
+                                selectedImageIds = new Set();
+                                isSelectionMode = false;
+                            }}
+                        >
+                            取消
+                        </Button>
+                        <div class="hidden sm:block h-4 w-px bg-border"></div>
+                    </div>
+
+                    <!-- Actions Row -->
+                    <div class="flex items-center justify-between w-full sm:w-auto gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+                         <Button 
+                            size="sm" 
+                            class="flex-1 sm:flex-none whitespace-nowrap"
+                            onclick={handleBatchMove}
+                        >
+                            移动
+                        </Button>
+
+                        <Button 
+                            size="sm"
+                            variant="success"
+                            class="flex-1 sm:flex-none whitespace-nowrap bg-green-600 hover:bg-green-700 text-white dark:bg-green-600 dark:hover:bg-green-700"
+                            onclick={handleBatchAuthorized}
+                        >
+                            已获许可
+                        </Button>
+
+                        <Button 
+                            size="sm" 
+                            class="flex-1 sm:flex-none whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
+                            disabled={isExporting}
+                            onclick={handleBatchExport}
+                        >
+                            {#if isExporting}
+                                打包...
+                            {:else}
+                                导出
+                            {/if}
+                        </Button>
+
+                        <Button
+                            size="sm"
+                            variant="destructive"
+                            class="flex-1 sm:flex-none whitespace-nowrap"
+                            onclick={handleBatchDelete}
+                        >
+                            删除
+                        </Button>
+                    </div>
                 
-                <Button 
-                    size="sm" 
-                    onclick={handleBatchMove}
-                >
-                    移动到分类
-                </Button>
-
-                <Button 
-                    size="sm" 
-                    class="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
-                    disabled={isExporting}
-                    onclick={handleBatchExport}
-                >
-                    {#if isExporting}
-                        打包中...
-                    {:else}
-                        导出
-                    {/if}
-                </Button>
-
-                 <Button 
-                    size="sm"
-                    class="bg-green-600 hover:bg-green-700 text-white dark:bg-green-600 dark:hover:bg-green-700"
-                    onclick={handleBatchAuthorized}
-                >
-                    已获许可
-                </Button>
-
-                <div class="h-4 w-px bg-border"></div>
-
-                <Button
-                    size="sm"
-                    variant="destructive"
-                    onclick={handleBatchDelete}
-                >
-                    删除
-                </Button>
-                <Button
-                    size="sm"
-                    variant="ghost"
-                    onclick={() => {
-                        selectedImageIds = new Set();
-                        isSelectionMode = false;
-                    }}>取消选择</Button
-                >
+                     <!-- Desktop Cancel -->
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        class="hidden sm:inline-flex"
+                        onclick={() => {
+                            selectedImageIds = new Set();
+                            isSelectionMode = false;
+                        }}>取消选择</Button
+                    >
+                </div>
             </div>
         {/if}
 
@@ -1273,9 +1294,9 @@
 
 <!-- 编辑对话框 -->
 <Dialog.Root bind:open={editDialogOpen}>
-    <Dialog.Content class="!w-[80%] !md:w-[90%] !lg:w-[90%] !max-w-none max-h-[90vh] overflow-hidden">
+    <Dialog.Content class="!w-[95%] !md:w-[90%] !lg:w-[90%] !max-w-none max-h-[90vh] overflow-hidden p-0">
         {#if editingImage}
-            <div class="flex flex-col md:flex-row gap-6 max-h-[80vh] overflow-y-auto">
+            <div class="flex flex-col md:flex-row gap-6 max-h-[80vh] overflow-y-auto w-full mx-auto p-4 md:p-6">
                 <!-- 图片预览 -->
                 <div 
                     class="md:w-auto flex-shrink-0 flex flex-col items-center md:max-w-[50%]"
@@ -1295,7 +1316,7 @@
                 </div>
 
                 <!-- 信息表单 -->
-                <div class="flex-1 space-y-6 pr-2 min-w-[300px]">
+                <div class="flex-1 space-y-6 pr-2 min-w-0">
                     <div class="space-y-2">
                         <Label class="text-base font-semibold text-foreground">标题</Label>
                         <Input bind:value={editingImage.title} class="h-10" />

@@ -779,10 +779,10 @@
         <!-- 筛选按钮 -->
         <Sheet.Root bind:open={filterOpen}>
             <Sheet.Trigger
-                class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 rounded-md"
+                class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 w-9 sm:w-auto px-0 sm:px-4 rounded-md"
             >
                 <Filter class="h-4 w-4" />
-                筛选
+                <span class="hidden sm:inline">筛选</span>
                 {#if selectedTags.length > 0}
                     <Badge variant="secondary" class="ml-1"
                         >{selectedTags.length}</Badge
@@ -791,7 +791,7 @@
             </Sheet.Trigger>
             <Sheet.Content
                 side="right"
-                class="w-[400px] flex flex-col p-0 sm:max-w-[400px]"
+                class="w-[90%] sm:w-[400px] flex flex-col p-0 sm:max-w-[400px]"
             >
                 <div
                     class="px-6 py-4 flex items-center justify-between border-b"
@@ -1104,8 +1104,10 @@
                                 <img
                                     src={resolveUrl(card.avatar ? `${card.avatar}?v=${new Date(card.updated_at).getTime()}` : "/default.webp")}
                                     alt={card.name}
+                                    decoding="async"
+                                    loading="lazy"
                                     class={cn(
-                                        "w-full h-full object-cover",
+                                        "w-full h-full object-cover transition-transform duration-300",
                                         card.cover_blur && "blur-xl scale-110",
                                     )}
                                 />
@@ -1137,7 +1139,7 @@
                                     </div>
                                 {:else}
                                     <button
-                                        class="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity backdrop-blur-sm hover:bg-black/80"
+                                        class="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity backdrop-blur-sm hover:bg-black/80"
                                         onclick={(e) => {
                                             e.stopPropagation();
                                             toggleCoverBlur(card);
@@ -1214,43 +1216,65 @@
 
         <!-- 底部批量操作栏 -->
         {#if isSelectionMode && selectedCardIds.size > 0}
-            <div
-                class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-popover border shadow-lg rounded-full px-6 py-3 flex items-center gap-4 animate-in slide-in-from-bottom"
-            >
-                <div class="text-sm font-medium">
-                    已选择 {selectedCardIds.size} 项
+            <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[92%] sm:w-auto">
+                <div class="bg-popover/95 backdrop-blur border shadow-xl rounded-2xl sm:rounded-full p-3 sm:px-6 sm:py-3 flex flex-col sm:flex-row items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom duration-300">
+                    <!-- Top Row (Mobile): Count + Mobile Cancel -->
+                    <div class="flex items-center justify-between w-full sm:w-auto sm:gap-4">
+                        <span class="text-sm font-medium whitespace-nowrap pl-1">已选择 {selectedCardIds.size} 项</span>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            class="h-8 text-muted-foreground sm:hidden"
+                            onclick={() => {
+                                selectedCardIds = new Set();
+                                isSelectionMode = false;
+                            }}
+                        >
+                            取消
+                        </Button>
+                        <div class="hidden sm:block h-4 w-px bg-border"></div>
+                    </div>
+
+                    <!-- Actions Row -->
+                    <div class="flex items-center justify-between w-full sm:w-auto gap-2">
+                        <Button size="sm" class="flex-1 sm:flex-none" onclick={handleBatchMove}>
+                            移动
+                        </Button>
+                        <Button 
+                            size="sm" 
+                            class="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
+                            onclick={handleBatchExport}
+                        >
+                            {#if selectedCardIds.size > 1}
+                                批量导出
+                            {:else}
+                                导出
+                            {/if}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="destructive"
+                            class="flex-1 sm:flex-none"
+                            onclick={() => {
+                                isBatchDeleteArgs = true;
+                                deleteDialogOpen = true;
+                            }}
+                        >
+                            删除
+                        </Button>
+                    </div>
+
+                    <!-- Desktop Cancel -->
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        class="hidden sm:inline-flex"
+                        onclick={() => {
+                            selectedCardIds = new Set();
+                            isSelectionMode = false;
+                        }}>取消选择</Button
+                    >
                 </div>
-                <div class="h-4 w-px bg-border"></div>
-                <Button size="sm" onclick={handleBatchMove}>移动到分类</Button>
-                <Button 
-                    size="sm" 
-                    class="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
-                    onclick={handleBatchExport}
-                >
-                    {#if selectedCardIds.size > 1}
-                        批量导出
-                    {:else}
-                        导出
-                    {/if}
-                </Button>
-                <Button
-                    size="sm"
-                    variant="destructive"
-                    onclick={() => {
-                        isBatchDeleteArgs = true;
-                        deleteDialogOpen = true;
-                    }}
-                >
-                    删除
-                </Button>
-                <Button
-                    size="sm"
-                    variant="ghost"
-                    onclick={() => {
-                        selectedCardIds = new Set();
-                        isSelectionMode = false;
-                    }}>取消选择</Button
-                >
             </div>
         {/if}
 
@@ -1432,24 +1456,48 @@
     <!-- Pagination Controls -->
     {#if totalPages > 1}
         <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-6">
-            <div class="text-sm text-muted-foreground">
+            <!-- Summary Text -->
+            <div class="text-sm text-muted-foreground order-2 sm:order-1 text-center sm:text-left">
                 显示 第 <span class="font-medium">{(currentPage - 1) * pageSize + 1}</span> 到 <span class="font-medium">{Math.min(currentPage * pageSize, totalItems)}</span> 条，共 <span class="font-medium">{totalItems}</span> 条角色
             </div>
             
-            <div class="flex items-center gap-2">
-                 <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage <= 1}
-                    onclick={() => {
-                        currentPage--;
-                        fetchCards();
-                    }}
-                >
-                    <ChevronLeft class="h-4 w-4 mr-1" /> 上一页
-                </Button>
+            <!-- Controls -->
+            <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-2 order-1 sm:order-2 w-full sm:w-auto">
+                <div class="flex items-center justify-between w-full sm:w-auto gap-2">
+                     <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage <= 1}
+                        onclick={() => {
+                            currentPage--;
+                            fetchCards();
+                        }}
+                        class="flex-1 sm:flex-none"
+                    >
+                        <ChevronLeft class="h-4 w-4 mr-1" /> <span class="sm:inline">上一页</span>
+                    </Button>
+
+                    <!-- Mobile Page Indicator -->
+                    <div class="sm:hidden text-sm font-medium">
+                        {currentPage} / {totalPages}
+                    </div>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage >= totalPages}
+                        onclick={() => {
+                            currentPage++;
+                            fetchCards();
+                        }}
+                        class="flex-1 sm:flex-none"
+                    >
+                        <span class="sm:inline">下一页</span> <ChevronRight class="h-4 w-4 ml-1" />
+                    </Button>
+                </div>
                 
-                <div class="flex items-center gap-2 mx-2">
+                <!-- Desktop Jump Controls -->
+                <div class="hidden sm:flex items-center gap-2 mx-2">
                     <span class="text-sm">第</span>
                     <Input
                         type="number"
@@ -1485,18 +1533,6 @@
                         跳转
                     </Button>
                 </div>
-
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage >= totalPages}
-                    onclick={() => {
-                        currentPage++;
-                        fetchCards();
-                    }}
-                >
-                    下一页 <ChevronRight class="h-4 w-4 ml-1" />
-                </Button>
             </div>
         </div>
     {/if}

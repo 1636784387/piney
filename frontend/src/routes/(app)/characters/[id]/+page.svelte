@@ -878,12 +878,12 @@
                                     />
                                     <!-- Cover Overlay -->
                                     <div
-                                        class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 text-white"
+                                        class="absolute inset-0 bg-black/10 lg:bg-black/40 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 text-white"
                                     >
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            class="bg-transparent text-white border-white hover:bg-white hover:text-black h-8 text-xs"
+                                            class="bg-transparent text-white border-white/60 lg:border-white hover:bg-white hover:text-black h-8 text-xs"
                                             onclick={() => coverInput.click()}
                                         >
                                             <Upload class="mr-2 h-3 w-3" /> 更换封面
@@ -895,7 +895,7 @@
                                             accept="image/*"
                                             class="hidden"
                                         />
-                                        <p class="text-[10px] opacity-80">
+                                        <p class="text-[10px] opacity-80 hidden lg:block">
                                             512x768
                                         </p>
                                     </div>

@@ -213,7 +213,7 @@
     }
 </script>
 
-<div class="container mx-auto py-6 space-y-6 max-w-7xl animate-in fade-in duration-500">
+<div class="container mx-auto py-6 space-y-6 max-w-7xl">
     <!-- 页面头部 -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="space-y-1">
@@ -328,23 +328,44 @@
     <!-- 分页控件 -->
     {#if totalPages > 1}
         <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-6">
-            <div class="text-sm text-muted-foreground">
+            <!-- Summary Text -->
+            <div class="text-sm text-muted-foreground order-2 sm:order-1 text-center sm:text-left">
                 显示 第 <span class="font-medium">{(currentPage - 1) * pageSize + 1}</span> 到 
                 <span class="font-medium">{Math.min(currentPage * pageSize, totalItems)}</span> 条，
                 共 <span class="font-medium">{totalItems}</span> 条
             </div>
             
-            <div class="flex items-center gap-2">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage <= 1}
-                    onclick={() => { currentPage--; loadTheaters(); }}
-                >
-                    <ChevronLeft class="h-4 w-4 mr-1" /> 上一页
-                </Button>
-                
-                <div class="flex items-center gap-2 mx-2">
+            <!-- Controls -->
+            <div class="flex flex-col sm:flex-row items-center gap-4 sm:gap-2 order-1 sm:order-2 w-full sm:w-auto">
+                <div class="flex items-center justify-between w-full sm:w-auto gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage <= 1}
+                        onclick={() => { currentPage--; loadTheaters(); }}
+                         class="flex-1 sm:flex-none"
+                    >
+                        <ChevronLeft class="h-4 w-4 mr-1" /> <span class="sm:inline">上一页</span>
+                    </Button>
+                    
+                     <!-- Mobile Page Indicator -->
+                    <div class="sm:hidden text-sm font-medium">
+                        {currentPage} / {totalPages}
+                    </div>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage >= totalPages}
+                        onclick={() => { currentPage++; loadTheaters(); }}
+                         class="flex-1 sm:flex-none"
+                    >
+                        <span class="sm:inline">下一页</span> <ChevronRight class="h-4 w-4 ml-1" />
+                    </Button>
+                </div>
+
+                 <!-- Desktop Jump Controls -->
+                <div class="hidden sm:flex items-center gap-2 mx-2">
                     <span class="text-sm">第</span>
                     <Input
                         type="number"
@@ -380,15 +401,6 @@
                         跳转
                     </Button>
                 </div>
-
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage >= totalPages}
-                    onclick={() => { currentPage++; loadTheaters(); }}
-                >
-                    下一页 <ChevronRight class="h-4 w-4 ml-1" />
-                </Button>
             </div>
         </div>
     {/if}
