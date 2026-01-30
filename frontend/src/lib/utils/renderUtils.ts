@@ -135,11 +135,12 @@ function extractCodeBlocks(text: string): { text: string; blocks: CodeBlock[] } 
     return { text: result, blocks };
 }
 
-// --- 5. 渲染块保护和提取（支持多种标签：piney_render, orange 等）---
 // 需要整体渲染的标签列表
-// Note: `details` processing is handled specially in Step 3.5 for ALL blocks,
-// including those nested inside piney_render.
-const RENDER_BLOCK_TAGS = ['piney_render', 'orange', 'details'];
+// 注意：`details` 必须排在最前面！
+// 这样 `details` 会最先被提取，内部的 `piney_render` 会保持原样在 `details` 块内。
+// 如果 `piney_render` 先提取，则 `details` 内部只剩占位符，后续处理会丢失内容。
+// 注意：不要添加 `summary`，它是 `details` 的子元素，不应单独提取！
+const RENDER_BLOCK_TAGS = ['details', 'piney_render', 'orange'];
 
 function extractRenderBlocks(text: string): { text: string; blocks: string[] } {
     const blocks: string[] = [];
@@ -174,8 +175,17 @@ function extractRenderBlocks(text: string): { text: string; blocks: string[] } {
             newResult += result.slice(i, startIdx);
 
             // 使用深度计数找到匹配的闭合标签
+            // 首先找到开始标签的闭合 >
+            let j = result.indexOf('>', startIdx);
+            if (j === -1) {
+                // 没有找到闭合 >，跳过这个字符
+                newResult += result[startIdx];
+                i = startIdx + 1;
+                continue;
+            }
+            j++; // 跳过 >
+
             let depth = 1;
-            let j = startIdx + startTagLen;
 
             while (j < result.length && depth > 0) {
                 const sub = result.slice(j);
@@ -197,16 +207,18 @@ function extractRenderBlocks(text: string): { text: string; blocks: string[] } {
                 // If found start tag CLOSER than end tag
                 if (nextStartRel !== -1 && nextStartRel < nextEndIdx) {
                     depth++;
-                    // Advance past this nested start tag
-                    j += nextStartRel + nextStartMatch![0].length;
+                    // Advance past the full nested start tag (find the closing >)
+                    const nestedStartAbsIdx = j + nextStartRel;
+                    const nestedTagEnd = result.indexOf('>', nestedStartAbsIdx);
+                    if (nestedTagEnd !== -1) {
+                        j = nestedTagEnd + 1;
+                    } else {
+                        j += nextStartRel + nextStartMatch![0].length;
+                    }
                 } else {
                     depth--;
                     // Advance past this end tag
-                    if (depth === 0) {
-                        j += nextEndIdx + endTag.length;
-                    } else {
-                        j += nextEndIdx + endTag.length;
-                    }
+                    j += nextEndIdx + endTag.length;
                 }
             }
 
@@ -319,6 +331,17 @@ function processSingleDetails(attrs: string, innerContent: string): string {
         bodyContent = innerContent.slice(sumMatch[0].length);
     }
 
+    // FAST PATH: If content contains rich HTML (piney_render, style, div with class/style, etc.),
+    // skip all complex processing and just return the HTML as-is to preserve the embedded content
+    const hasRichHtml = /<piney_render[\s>]/i.test(bodyContent) ||
+        /<style[\s>]/i.test(bodyContent) ||
+        /<div\s+[^>]*(class|style)\s*=/i.test(bodyContent) ||
+        /<span\s+[^>]*style\s*=/i.test(bodyContent);
+
+    if (hasRichHtml) {
+        return `<details${attrs}>${summaryHTML}${bodyContent}</details>`;
+    }
+
     // Step 1: Recursively process any nested <details> in body FIRST
     bodyContent = processNestedDetails(bodyContent);
 
@@ -331,16 +354,147 @@ function processSingleDetails(attrs: string, innerContent: string): string {
     });
 
     // Step 3: Protect already-processed <details> blocks from Markdown
+    // Must use depth-counting because [\s\S]*? is non-greedy and breaks nesting
     const detailsBlocks: string[] = [];
-    protectedBody = protectedBody.replace(/<details[\s\S]*?<\/details>/gi, (match: string) => {
+    let detailsTempBody = protectedBody;
+    let detailsProtectedBody = '';
+    let detailsScanIdx = 0;
+    const detailsStartRegex = /<details([\s>])/i;
+    const detailsEndTag = '</details>';
+
+    while (detailsScanIdx < detailsTempBody.length) {
+        const substr = detailsTempBody.slice(detailsScanIdx);
+        const startMatch = substr.match(detailsStartRegex);
+
+        if (!startMatch) {
+            detailsProtectedBody += substr;
+            break;
+        }
+
+        const startIdx = detailsScanIdx + startMatch.index!;
+        detailsProtectedBody += detailsTempBody.slice(detailsScanIdx, startIdx);
+
+        // Find matching end tag with depth counting
+        // First, find the end of the opening tag (the closing >)
+        let j = detailsTempBody.indexOf('>', startIdx);
+        if (j === -1) {
+            // No closing > for start tag, skip this
+            detailsProtectedBody += detailsTempBody[startIdx];
+            detailsScanIdx = startIdx + 1;
+            continue;
+        }
+        j++; // Move past the >
+
+        let depth = 1;
+        while (j < detailsTempBody.length && depth > 0) {
+            const sub = detailsTempBody.slice(j);
+            const nextStartMatch = sub.match(detailsStartRegex);
+            const nextEndIdx = sub.toLowerCase().indexOf(detailsEndTag.toLowerCase());
+            const nextStartRel = nextStartMatch ? nextStartMatch.index! : -1;
+
+            if (nextEndIdx === -1) {
+                j = detailsTempBody.length;
+                break;
+            }
+
+            if (nextStartRel !== -1 && nextStartRel < nextEndIdx) {
+                depth++;
+                // Skip past the full opening tag (find the closing >)
+                const nestedStartAbsIdx = j + nextStartRel;
+                const nestedTagEnd = detailsTempBody.indexOf('>', nestedStartAbsIdx);
+                if (nestedTagEnd !== -1) {
+                    j = nestedTagEnd + 1;
+                } else {
+                    j += nextStartRel + nextStartMatch![0].length;
+                }
+            } else {
+                depth--;
+                j += nextEndIdx + detailsEndTag.length;
+            }
+        }
+
+        const blockContent = detailsTempBody.slice(startIdx, j);
         const idx = detailsBlocks.length;
-        detailsBlocks.push(match);
-        return `<!--NESTED_DETAILS_${idx}-->`;
-    });
+        detailsBlocks.push(blockContent);
+        detailsProtectedBody += `<!--NESTED_DETAILS_${idx}-->`;
+        detailsScanIdx = j;
+    }
+    protectedBody = detailsProtectedBody;
+
+    // Step 3.5: Protect <piney_render> blocks from Markdown (they should be preserved as-is)
+    const pineyRenderBlocks: string[] = [];
+    // Use depth-counting to find matching closing tags
+    let tempBody = protectedBody;
+    let protectedBodyNew = '';
+    let scanIdx = 0;
+    const pineyStartRegex = /<piney_render([\s>])/i;
+    const pineyEndTag = '</piney_render>';
+
+    while (scanIdx < tempBody.length) {
+        const substr = tempBody.slice(scanIdx);
+        const startMatch = substr.match(pineyStartRegex);
+
+        if (!startMatch) {
+            protectedBodyNew += substr;
+            break;
+        }
+
+        const startIdx = scanIdx + startMatch.index!;
+        protectedBodyNew += tempBody.slice(scanIdx, startIdx);
+
+        // Find matching end tag with depth counting
+        // First, find the end of the opening tag (the closing >)
+        let j = tempBody.indexOf('>', startIdx);
+        if (j === -1) {
+            // No closing > for start tag, skip this
+            protectedBodyNew += tempBody[startIdx];
+            scanIdx = startIdx + 1;
+            continue;
+        }
+        j++; // Move past the >
+
+        let depth = 1;
+        while (j < tempBody.length && depth > 0) {
+            const sub = tempBody.slice(j);
+            const nextStartMatch = sub.match(pineyStartRegex);
+            const nextEndIdx = sub.toLowerCase().indexOf(pineyEndTag.toLowerCase());
+            const nextStartRel = nextStartMatch ? nextStartMatch.index! : -1;
+
+            if (nextEndIdx === -1) {
+                j = tempBody.length;
+                break;
+            }
+
+            if (nextStartRel !== -1 && nextStartRel < nextEndIdx) {
+                depth++;
+                // Skip past the full opening tag (find the closing >)
+                const nestedStartAbsIdx = j + nextStartRel;
+                const nestedTagEnd = tempBody.indexOf('>', nestedStartAbsIdx);
+                if (nestedTagEnd !== -1) {
+                    j = nestedTagEnd + 1;
+                } else {
+                    j += nextStartRel + nextStartMatch![0].length;
+                }
+            } else {
+                depth--;
+                j += nextEndIdx + pineyEndTag.length;
+            }
+        }
+
+        const blockContent = tempBody.slice(startIdx, j);
+        const idx = pineyRenderBlocks.length;
+        pineyRenderBlocks.push(blockContent);
+        protectedBodyNew += `<!--PINEY_RENDER_${idx}-->`;
+        scanIdx = j;
+    }
+    protectedBody = protectedBodyNew;
 
     // Step 4: Check if content is already HTML (contains styled block elements)
     // If so, skip Markdown parsing to avoid escaping the HTML
-    const isAlreadyHtml = /<(div|p|span|strong|em|table|ul|ol|li)\s+[^>]*style\s*=/i.test(protectedBody) ||
+    // Also skip if we have piney_render placeholders (content was already HTML)
+    const hasPineyRenderPlaceholders = pineyRenderBlocks.length > 0;
+    const isAlreadyHtml = hasPineyRenderPlaceholders ||
+        /<(div|p|span|strong|em|table|ul|ol|li)\s+[^>]*style\s*=/i.test(protectedBody) ||
         /<(div|table|ul|ol)\s*>/i.test(protectedBody.trim().slice(0, 100));
 
     let bodyHTML: string;
@@ -358,6 +512,15 @@ function processSingleDetails(attrs: string, innerContent: string): string {
         const placeholder = `<!--NESTED_DETAILS_${idx}-->`;
         bodyHTML = bodyHTML.replace(`<p>${placeholder}</p>`, block);
         bodyHTML = bodyHTML.replace(placeholder, block);
+    });
+
+    // Step 5.5: Restore piney_render blocks (preserved as-is, wrapped in div for styling)
+    pineyRenderBlocks.forEach((block, idx) => {
+        const placeholder = `<!--PINEY_RENDER_${idx}-->`;
+        // Wrap in a div with class for potential styling, but keep content as-is
+        const wrappedBlock = `<div class="piney-render-block">${block}</div>`;
+        bodyHTML = bodyHTML.replace(`<p>${placeholder}</p>`, wrappedBlock);
+        bodyHTML = bodyHTML.replace(placeholder, wrappedBlock);
     });
 
     // Step 6: Restore code blocks with proper styling
@@ -446,40 +609,17 @@ export function processTextWithPipeline(text: string, options: RenderOptions): P
                 return ''; // Replace with empty string (removes block)
             }
 
-            // 2. Details 特殊处理 (Manually Render Content)
+            // 2. Details 特殊处理 (使用 processSingleDetails 函数，它已经包含 piney_render 保护逻辑)
             if (tagName === 'details') {
                 // Capture Attributes before stripping
                 const startTagMatch = block.match(/^<details([^>]*)>/i);
                 const attrs = startTagMatch ? startTagMatch[1] : '';
 
                 // Remove outer tags
-                let content = block.replace(/^<details[^>]*>/i, '').replace(/<\/details>$/i, '');
+                const content = block.replace(/^<details[^>]*>/i, '').replace(/<\/details>$/i, '');
 
-                let summaryHTML = '';
-                const sumMatch = content.match(/^\s*<summary(.*?)>([\s\S]*?)<\/summary>/i);
-                if (sumMatch) {
-                    const sumAttrs = sumMatch[1];
-                    const sumContent = sumMatch[2];
-                    // Parse Summary Inline with breaks: true
-                    summaryHTML = `<summary${sumAttrs}>${marked.parseInline(sumContent, { breaks: true })}</summary>`;
-
-                    // Remove summary from content safely
-                    if (sumMatch.index !== undefined) {
-                        content = content.slice(0, sumMatch.index) + content.slice(sumMatch.index + sumMatch[0].length);
-                    }
-                }
-
-                // Parse Body (Block) with breaks: true
-                // Double-ensure breaks by injecting spacing forcing (Standard Markdown behavior for hard breaks)
-                // Since code blocks are already extracted, this is safe to apply greedily
-                const safeContent = content.replace(/\n/g, '  \n');
-
-
-                const bodyHTML = marked.parse(safeContent, { async: false, breaks: true }) as string;
-
-
-                // Restore Attributes (and ensure summary is first)
-                return `<details${attrs}>${summaryHTML}${bodyHTML}</details>`;
+                // 使用 processSingleDetails 处理，它会保护嵌套的 piney_render
+                return processSingleDetails(attrs, content);
             }
 
             // 3. 换行处理 - Case Insensitive Check
@@ -497,8 +637,15 @@ export function processTextWithPipeline(text: string, options: RenderOptions): P
     // ========== Step 3.6: 处理嵌套的 <details> ==========
     // 因为 piney_render 可能包含 <details>，而 <details> 需要特殊 Markdown 处理
     // 这里对所有渲染块递归处理其中的 <details>
+    // 注意：跳过 details 块本身，因为它们已经在 Step 3.5 中处理过了
     if (renderBlocks.length > 0) {
-        renderBlocks = renderBlocks.map(block => processNestedDetails(block));
+        renderBlocks = renderBlocks.map(block => {
+            // 如果块本身就是 <details>，跳过（已在 Step 3.5 处理）
+            if (/^<details[\s>]/i.test(block)) {
+                return block;
+            }
+            return processNestedDetails(block);
+        });
     }
 
     // ========== Step 4: 标签过滤（剩余文本）==========
@@ -523,6 +670,25 @@ export function processTextWithPipeline(text: string, options: RenderOptions): P
     let html = marked.parse(res, { async: false, breaks: true }) as string;
 
     // ========== Step 8: 恢复渲染块占位符 ==========
+    // 首先，递归解析渲染块内部的占位符（处理嵌套情况，如 piney_render > details）
+    // 需要多次遍历，因为可能有多层嵌套
+    let resolved = true;
+    while (resolved) {
+        resolved = false;
+        for (let i = 0; i < renderBlocks.length; i++) {
+            for (let j = 0; j < renderBlocks.length; j++) {
+                if (i !== j) {
+                    const placeholder = `<!--RENDER_BLOCK_${j}-->`;
+                    if (renderBlocks[i].includes(placeholder)) {
+                        renderBlocks[i] = renderBlocks[i].replace(placeholder, renderBlocks[j]);
+                        resolved = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 然后恢复到主 HTML
     renderBlocks.forEach((block: string, idx: number) => {
         const placeholder = `<!--RENDER_BLOCK_${idx}-->`;
         html = html.replace(`<p>${placeholder}</p>`, `<div class="piney-render-block" data-render-idx="${idx}">${block}</div>`);
