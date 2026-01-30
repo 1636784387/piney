@@ -114,15 +114,19 @@ docker compose up -d
 ## Zeabur部署方法：
 
 1. 新建服务
+
 ![alt text](doc/1.png)
 
 2. 选择 Docker容器镜像
+
 ![alt text](doc/2.png)
 
 3. 填写镜像信息、端口
+
 ![alt text](doc/3.png)
 
 4. 添加数据卷
+
 ![alt text](doc/4.png)
 
 完成，之后可以自己创建访问链接。
