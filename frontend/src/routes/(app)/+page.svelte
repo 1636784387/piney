@@ -160,7 +160,7 @@
         <!-- 数据库容量 -->
         <div class="group relative overflow-hidden rounded-2xl border bg-card p-4 sm:p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 min-h-[120px] sm:min-h-[160px] flex justify-between">
             <div class="flex flex-col justify-between z-10 w-full overflow-hidden">
-                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">数据库容量</p>
+                 <p class="text-xs sm:text-sm font-medium text-muted-foreground/70">数据占用量</p>
                  <h3 class="text-2xl sm:text-4xl font-bold tracking-tight text-foreground flex items-baseline gap-1 whitespace-nowrap">
                     {#if loading} <span class="animate-pulse bg-muted rounded h-8 w-12 block"></span> {:else} {stats?.db_size_mb || 0} <span class="text-lg sm:text-2xl font-normal text-muted-foreground">MB</span>{/if}
                  </h3>

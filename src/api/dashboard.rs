@@ -77,14 +77,40 @@ pub async fn get_dashboard_stats(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // 2. DB Size
-    let db_path = Path::new("./data/piney.db");
-    let db_size_mb = if db_path.exists() {
-        let size = std::fs::metadata(db_path).map(|m| m.len()).unwrap_or(0);
-        (size as f64) / (1024.0 * 1024.0)
-    } else {
-        0.0
-    };
+    // 2. Data Directory Size (Recursive)
+    let db_size_mb = tokio::task::spawn_blocking(|| {
+        fn get_dir_size(path: impl AsRef<Path>) -> u64 {
+            let path = path.as_ref();
+            if !path.exists() {
+                return 0;
+            }
+
+            let mut size = 0;
+            if path.is_dir() {
+                if let Ok(entries) = std::fs::read_dir(path) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.is_dir() {
+                            size += get_dir_size(&p);
+                        } else {
+                            if let Ok(meta) = p.metadata() {
+                                size += meta.len();
+                            }
+                        }
+                    }
+                }
+            } else if let Ok(meta) = path.metadata() {
+                size = meta.len();
+            }
+            size
+        }
+
+        let data_dir = crate::utils::paths::get_data_dir();
+        let total_size = get_dir_size(data_dir);
+        (total_size as f64) / (1024.0 * 1024.0)
+    })
+    .await
+    .unwrap_or(0.0);
 
     // 3. 最近编辑 (Top 5)
     let recent_cards = character_card::Entity::find()
