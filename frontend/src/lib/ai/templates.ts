@@ -225,6 +225,50 @@ export const WORLD_INFO_GEN_TEMPLATE = `# Role: The Universal Archivist (全域�
 2.  **Refine**: 补充缺失的代价、缺陷和物理细节。
 3.  **Generate**: 输出 JSON 数据`;
 
+export const GENERATE_OPENING_TEMPLATE = `# Role: Expert Creative Director & RP Writer
+You are an expert at crafting "Golden Openers" for roleplay scenarios. Your goal is to hook the user immediately with high-stakes atmosphere and vivid sensory details.
+
+## Task
+Write an engaging **Opening Message** for the character {{char}} to initiate a roleplay scenario with {{user}}.
+
+## Context Data
+- **Character Description**: {{description}}
+- **Personality**: {{personality}}
+- **World Setting**: {{world_info}}
+
+## User Input
+- **Specific Scenario Request**: {{user_request}}
+- **Target Word Count**: {{word_count}}
+
+## Critical Constraints & Quality Standards (Non-Negotiable)
+1. **Variable Protocol (Strict Output Rule)**:
+   - **Literal Placeholders**: In your final output, you **MUST** use the exact strings \`{{char}}\` and \`{{user}}\` to refer to the character and the user.
+   - **No Name Resolution**: Do NOT replace them with their actual names. Even if you know the character is named "Alice", you must write \`{{char}}\`.
+
+2. **Length Control**:
+   - The output length must be within **{{word_count}} words (+/- 20%)**.
+
+3. **Style & Content Mandates**:
+   - **Innovation Over Convention**: Reject standard greetings or boring intros. Break expectations. Use the "In Medias Res" technique (start in the middle of the action).
+   - **High Tension**: Establish immediate conflict, danger, intense desire, or unease from the very first sentence.
+   - **Anti-Cliché**: Do NOT use stale tropes. Avoid boring descriptions of waking up or standing around.
+   - **Show, Don't Tell**: Do not describe {{char}} as "angry" or "seductive". Describe the physical evidence (e.g., trembling hands, dilated pupils, heavy breathing).
+   - **Engagement**: Leave clear "hooks" (physical or conversational) that force {{user}} to react.
+
+4. **No God-Modding**:
+   - You must NOT describe {{user}}'s thoughts, feelings, or spoken dialogue. You may only describe {{user}}'s passive physical position if necessary for the scene.
+
+## Output Rules
+1. **Language**: Strictly **Simplified Chinese (简体中文)**.
+2. **Format**: **Plain Text ONLY**.
+   - NO Markdown syntax (no \`**bold**\`, no \`### headers\`).
+   - NO explanations or preambles.
+   - **Dialogue Formatting**: All spoken dialogue MUST be enclosed in double quotes (\`""\`). Example: "这是对话内容。"
+   - Use standard novel formatting for narration.
+
+## Output
+(Directly generate the Simplified Chinese opening message below, strictly using {{char}} and {{user}} placeholders)`;
+
 export const PROMPT_TEMPLATES: Record<string, string> = {
   [AiFeature.OVERVIEW]: `请深入分析以下角色卡数据：
 
@@ -251,6 +295,7 @@ Creator Notes: {{creator_notes}}
   [AiFeature.TRANSLATE]: TRANSLATE_TEMPLATE,
   [AiFeature.GENERATE_CHARACTER]: "{{task_instruction}}",
   [AiFeature.GENERATE_WORLD_INFO]: WORLD_INFO_GEN_TEMPLATE,
+  [AiFeature.GENERATE_OPENING]: GENERATE_OPENING_TEMPLATE,
 };
 
 export const SYSTEM_PROMPTS: Record<string, string> = {

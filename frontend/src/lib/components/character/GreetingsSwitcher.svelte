@@ -9,7 +9,7 @@
         Trash2,
         Maximize2,
         MessageSquare,
-        Wand
+        Palette
     } from "lucide-svelte";
     import RichTextarea from "./RichTextarea.svelte";
     import { toast } from "svelte-sonner";
@@ -24,6 +24,7 @@
         alternateGreetings = $bindable([]),
         isDirty = false,
         regexScripts = [],
+        extraActions = undefined as import('svelte').Snippet | undefined,
         class: className = undefined,
     } = $props();
 
@@ -156,8 +157,12 @@
                 onclick={togglePreview}
                 title="预览渲染效果"
             >
-                <Wand class="h-4 w-4" />
+                <Palette class="h-4 w-4" />
             </Button>
+
+            {#if extraActions}
+                {@render extraActions()}
+            {/if}
 
             <Button
                 variant="ghost"

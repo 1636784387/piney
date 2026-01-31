@@ -119,6 +119,91 @@
     let isGenerating = false;
     let isDescZenMode = false;
 
+    // AI Opening Generation State
+    let isOpeningGenDialogOpen = false;
+    let openingGenRequest = "";
+    let openingWordCount = "";
+    let openingIncludeWorldInfo = false;
+    let isGeneratingOpening = false;
+
+    function resetOpeningGenState() {
+        openingGenRequest = "";
+        openingWordCount = ""; // No default value
+        openingIncludeWorldInfo = false;
+    }
+
+    function openOpeningGenDialog() {
+        resetOpeningGenState();
+        isOpeningGenDialogOpen = true;
+    }
+
+    async function handleGenerateOpening() {
+        if (!openingGenRequest.trim()) {
+            toast.error("请输入开场白要求");
+            return;
+        }
+        if (!openingWordCount || isNaN(Number(openingWordCount))) {
+            toast.error("请输入有效的字数要求（数字）");
+            return;
+        }
+
+        isGeneratingOpening = true;
+
+        // Build World Info Context
+        let worldInfoContext = "";
+        // Try V2 path first, then V1/Root path (Same logic as Description Gen)
+        const wb = card.data?.data?.character_book || card.data?.character_book;
+        let entriesData: any[] = [];
+        if (wb?.entries) {
+            if (Array.isArray(wb.entries)) {
+                 entriesData = wb.entries;
+            } else {
+                 entriesData = Object.values(wb.entries);
+            }
+        }
+
+        // Filter enabled entries
+        const enabledEntries = entriesData.filter((e: any) => e.enabled !== false && e.disable !== true); 
+
+        if (openingIncludeWorldInfo && enabledEntries.length > 0) {
+            const formattedEntries = enabledEntries.map((e: any, index: number) => {
+                // Use comment as name if available, otherwise just index or content snippet
+                const title = e.comment || `Entry ${index + 1}`;
+                const content = e.content || "";
+                return `Name: ${title}\nContent: ${content}`;
+            }).join("\n---\n");
+            
+            worldInfoContext = `## World Info Context\n(Use these details to ground the opening in the setting)\n${formattedEntries}`;
+        }
+
+        try {
+            const content = await AiService.generateOpening(
+                card,
+                openingGenRequest,
+                openingWordCount,
+                worldInfoContext
+            );
+
+            // Insertion Logic
+            if (!formFirstMes || !formFirstMes.trim()) {
+                formFirstMes = content;
+                toast.success("已生成并设置为主开场白");
+            } else {
+                if (!formAltGreetings) formAltGreetings = [];
+                formAltGreetings = [...formAltGreetings, content];
+                toast.success("已生成并添加到备选开场白列表");
+            }
+            
+            isGreetingsDirty = true; // Mark as dirty
+            isOpeningGenDialogOpen = false;
+        } catch (err: any) {
+             console.error(err);
+             toast.error("生成失败: " + (err.message || err));
+        } finally {
+            isGeneratingOpening = false;
+        }
+    }
+
     function handleGenDialogChange(open: boolean) {
         if (!open && isGenerating) {
              toast.warning("AI 正在生成中，关闭窗口可能会中断任务");
@@ -1362,6 +1447,7 @@
                                             []
                                         }
                                         isDirty={isGreetingsDirty}
+                                        extraActions={openingGenButton}
                                         class="border-0 shadow-none bg-transparent"
                                     />
                                 </div>
@@ -1688,6 +1774,69 @@
     </Dialog.Content>
 </Dialog.Root>
 
+<!-- AI Opening Generation Dialog -->
+<Dialog.Root bind:open={isOpeningGenDialogOpen}>
+    <Dialog.Content class="sm:max-w-[500px]">
+        <Dialog.Header>
+            <Dialog.Title class="flex items-center gap-2">
+                <Bot class="h-5 w-5 text-primary" />
+                AI 开场白生成
+            </Dialog.Title>
+            <Dialog.Description>
+                设定场景与冲突，生成引人入胜的开场。
+            </Dialog.Description>
+        </Dialog.Header>
+        
+        <div class="space-y-4 py-4">
+            <div class="space-y-2">
+                <Label>场景与要求 <span class="text-destructive">*</span></Label>
+                <Textarea 
+                    bind:value={openingGenRequest} 
+                    placeholder="描述开场的情境、冲突点或想要发生的事件..."
+                    rows={4}
+                />
+            </div>
+
+            <div class="space-y-2">
+                <Label>字数要求 <span class="text-destructive">*</span></Label>
+                <Input 
+                    type="number"
+                    bind:value={openingWordCount} 
+                    placeholder="例如: 200"
+                />
+            </div>
+            
+            <div class="flex items-start gap-2 pt-2">
+                <Checkbox id="opening-include-wi" bind:checked={openingIncludeWorldInfo} class="mt-0.5 border-muted-foreground/50" />
+                <div class="grid gap-1.5 leading-none">
+                    <Label
+                        for="opening-include-wi"
+                        class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                        附加世界书
+                    </Label>
+                    <p class="text-sm text-muted-foreground">
+                        勾选此项将会在提示词中附加世界书内容，确保符合设定。
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <Dialog.Footer>
+            <Button variant="outline" onclick={() => isOpeningGenDialogOpen = false}>取消</Button>
+            <Button onclick={handleGenerateOpening} disabled={isGeneratingOpening}>
+                {#if isGeneratingOpening}
+                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                    生成中...
+                {:else}
+                    <Sparkles class="mr-2 h-4 w-4" />
+                    开始生成
+                {/if}
+            </Button>
+        </Dialog.Footer>
+    </Dialog.Content>
+</Dialog.Root>
+
 {#snippet genButton()}
     {#if card.source === "local"}
         {#if isGenerating}
@@ -1699,6 +1848,20 @@
                  <Bot class="mr-1 h-3 w-3" /> AI生成
              </Button>
         {/if}
+    {/if}
+{/snippet}
+
+{#snippet openingGenButton()}
+    {#if card.source === "local"}
+        <Button
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7 text-muted-foreground hover:text-primary"
+            onclick={openOpeningGenDialog}
+            title="AI 生成开场白"
+        >
+            <Bot class="h-4 w-4" />
+        </Button>
     {/if}
 {/snippet}
 

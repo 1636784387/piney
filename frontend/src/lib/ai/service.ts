@@ -336,6 +336,69 @@ export class AiService {
     }
 
     /**
+     * 生成开场白
+     */
+    static async generateOpening(
+        card: any,
+        userInput: string,
+        wordCount: string,
+        worldInfoContent: string
+    ) {
+        if (this.activeRequests >= this.MAX_CONCURRENT) {
+            throw new Error(`AI 请求队列已满 (${this.activeRequests}/${this.MAX_CONCURRENT})，请稍后再试`);
+        }
+
+        this.activeRequests++;
+        try {
+            const { GENERATE_OPENING_TEMPLATE } = await import('./templates');
+            const globalPrompt = await this.getGlobalPrompt();
+
+            // 准备变量 (兼容 V1/V2/V3)
+            let cardData: any = {};
+            try {
+                cardData = typeof card.data === 'string' ? JSON.parse(card.data) : card.data;
+            } catch (e) { }
+            cardData = cardData || {};
+            const getField = (key: string) => cardData[key] || cardData.data?.[key] || "";
+
+            const description = card.description || "";
+            const personality = getField('personality');
+
+            // 替换变量
+            const userPrompt = GENERATE_OPENING_TEMPLATE
+                .replace(/{{description}}/g, description)
+                .replace(/{{personality}}/g, personality)
+                .replace(/{{world_info}}/g, worldInfoContent)
+                .replace(/{{user_request}}/g, userInput)
+                .replace(/{{word_count}}/g, wordCount);
+
+            // 注意：{{char}} 和 {{user}} 已在 Prompt 中硬编码为字面量要求，无需替换
+
+            const feature = AiFeature.GENERATE_OPENING;
+            const systemPrompt = globalPrompt || ""; // 开场白通常不需要特定 System Prompt，使用全局即可，或者可以为空
+
+            const messages = [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ];
+
+            const token = localStorage.getItem("auth_token");
+            const response = await this.execute(feature, messages, token);
+            let content = response.choices?.[0]?.message?.content || "";
+
+            // 预处理：移除 <think>/<thinking> 标签及其内容
+            content = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
+            content = content.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
+            content = content.trim();
+
+            return content;
+
+        } finally {
+            this.activeRequests--;
+        }
+    }
+
+    /**
      * 生成前端样式（皮皮美化生成器）
      * @param params 生成参数
      * @param params.originalText 原始文本

@@ -8,6 +8,7 @@ export enum AiFeature {
     GENERATE_CHARACTER = 'generate_character', // 生成角色
     GENERATE_WORLD_INFO = 'generate_world_info', // 生成世界书
     GENERATE_FRONTEND_STYLE = 'generate_frontend_style', // 生成前端样式
+    GENERATE_OPENING = 'generate_opening', // 生成开场白
 }
 
 export interface PromptVariables {
