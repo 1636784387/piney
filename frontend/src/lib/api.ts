@@ -6,7 +6,7 @@
  * - Tauri 模式：通过 localhost HTTP 请求
  */
 
-// API 基础路径
+// API 基础路径 - 检测环境
 export const getApiBase = (): string => {
     // 检测是否在 Tauri 环境 (支持 v1 和 v2)
     if (typeof window !== 'undefined' &&
@@ -17,7 +17,14 @@ export const getApiBase = (): string => {
     return '';
 };
 
-export const API_BASE = getApiBase();
+// 缓存 API_BASE 值（首次调用时计算）
+let _apiBaseCache: string | null = null;
+export const API_BASE = (() => {
+    if (_apiBaseCache === null) {
+        _apiBaseCache = getApiBase();
+    }
+    return _apiBaseCache;
+})();
 
 /**
  * 智能解析 URL

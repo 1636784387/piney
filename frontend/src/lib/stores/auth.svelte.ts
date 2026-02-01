@@ -2,7 +2,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import { get } from 'svelte/store';
 
-import { API_BASE } from '$lib/api';
+import { getApiBase } from '$lib/api';
 
 class AuthStore {
     authenticated = $state(false);
@@ -19,7 +19,7 @@ class AuthStore {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const res = await fetch(`${API_BASE}/api/auth/status`, {
+            const res = await fetch(`${getApiBase()}/api/auth/status`, {
                 headers
             });
 
@@ -92,7 +92,7 @@ class AuthStore {
             if (token) {
                 headers['Authorization'] = `Bearer ${token}`;
             }
-            const res = await fetch(`${API_BASE}/api/settings`, { headers });
+            const res = await fetch(`${getApiBase()}/api/settings`, { headers });
             if (res.ok) {
                 const settings = await res.json();
                 if (settings.avatar) {

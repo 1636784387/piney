@@ -157,6 +157,14 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && npm install
 
+      - name: Install Tauri CLI globally
+        run: npm install -g @tauri-apps/cli
+
+      - name: Create Tauri symlink for Gradle
+        run: |
+          mkdir -p src-tauri
+          ln -sf $(which tauri) src-tauri/tauri
+
       - name: Sync SvelteKit
         run: cd frontend && npx svelte-kit sync
 

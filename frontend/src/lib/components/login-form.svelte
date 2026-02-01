@@ -96,7 +96,7 @@
 						<p
 							class="text-center text-muted-foreground text-balance text-xs"
 						>
-							如果忘了用户名和密码就到/data/config.yml中查看
+							首次使用小兄许？<a href="/sign-up" class="text-primary underline hover:no-underline">点击注册</a>
 						</p>
 					</div>
 				</FieldGroup>
