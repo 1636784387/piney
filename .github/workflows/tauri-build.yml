@@ -51,7 +51,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: './frontend'
+          tauriScript: ./frontend/node_modules/.bin/tauri
           tagName: v${{ inputs.version }}
           releaseName: '小兄许 v${{ inputs.version }}'
           releaseBody: '下载对应平台的安装包进行安装。'
@@ -101,7 +101,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: './frontend'
+          tauriScript: ./frontend/node_modules/.bin/tauri
           tagName: v${{ inputs.version }}
           releaseName: '小兄许 v${{ inputs.version }}'
           releaseBody: '下载对应平台的安装包进行安装。'
@@ -161,14 +161,14 @@ jobs:
         run: cd frontend && npx svelte-kit sync
 
       - name: Initialize Android project
-        run: cd frontend && npm run tauri android init
+        run: ./frontend/node_modules/.bin/tauri android init
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         with:
-          projectPath: './frontend'
+          tauriScript: ./frontend/node_modules/.bin/tauri
           tagName: v${{ inputs.version }}
           releaseName: '小兄许 v${{ inputs.version }}'
           releaseBody: '下载对应平台的安装包进行安装。'
