@@ -43,7 +43,7 @@
             }
 
             const data = await res.json();
-            auth.setup(data.token);
+            auth.setup(data.token, username);
         } catch (e: any) {
             console.error(e);
             error = e.message;

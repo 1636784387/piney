@@ -71,10 +71,11 @@ class AuthStore {
         this.checkRedirect();
     }
 
-    async setup(token: string) {
+    async setup(token: string, username: string) {
         localStorage.setItem('auth_token', token);
         this.initialized = true;
         this.authenticated = true;
+        this.username = username;
         this.fetchAvatar();
         this.checkRedirect();
     }

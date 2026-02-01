@@ -34,6 +34,7 @@ pub struct StatusResponse {
     initialized: bool,
     authenticated: bool, // This will be handled by middleware essentially, but for status check we might just indicate if config exists
     username: Option<String>,
+    data_dir: Option<String>,
 }
 
 // Claims
@@ -55,6 +56,11 @@ async fn get_status(State(config): State<ConfigState>) -> impl IntoResponse {
         initialized,
         authenticated: false, // Client should check this via middleware/token
         username,
+        data_dir: Some(
+            crate::utils::paths::get_data_dir()
+                .to_string_lossy()
+                .to_string(),
+        ),
     })
 }
 

@@ -21,10 +21,22 @@ use utils::mode_detect::RunMode;
 /// 创建 Axum 应用实例
 pub async fn create_app(db: DatabaseConnection, mode: RunMode, config: ConfigState) -> Router {
     // CORS 配置
+    // CORS 配置
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::DELETE,
+            axum::http::Method::PATCH,
+            axum::http::Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::ACCEPT,
+        ]);
 
     // Public routes (Auth + Public Settings)
     let public_api = Router::new()

@@ -51,7 +51,7 @@
 						{...props}
 					>
 						<Avatar.Root class="size-8 rounded-full">
-							<Avatar.Image src={resolveUrl(user.avatar)} alt={user.name} />
+							<Avatar.Image src={resolveUrl(user.avatar)} alt={user.name} class="object-cover" />
 							<Avatar.Fallback class="rounded-full"
 								>{user.name?.[0]?.toUpperCase() ||
 									"A"}</Avatar.Fallback
@@ -78,7 +78,7 @@
 						class="flex items-center gap-2 px-1 py-1.5 text-start text-sm"
 					>
 						<Avatar.Root class="size-8 rounded-full">
-							<Avatar.Image src={resolveUrl(user.avatar)} alt={user.name} />
+							<Avatar.Image src={resolveUrl(user.avatar)} alt={user.name} class="object-cover" />
 							<Avatar.Fallback class="rounded-full"
 								>{user.name?.[0]?.toUpperCase() ||
 									"A"}</Avatar.Fallback
