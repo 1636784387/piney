@@ -40,8 +40,8 @@ export function resolveUrl(url: string | null | undefined): string {
     ) {
         return url;
     }
-    // 如果是 /api, /cards, /uploads 开头的路径，且没有 API_BASE 前缀，则补全
-    if (url.startsWith("/api") || url.startsWith("/cards") || url.startsWith("/uploads")) {
+    // 如果是 /api, /cards, /uploads, /images 开头的路径，且没有 API_BASE 前缀，则补全
+    if (url.startsWith("/api") || url.startsWith("/cards") || url.startsWith("/uploads") || url.startsWith("/images")) {
         return `${API_BASE}${url}`;
     }
     return url;

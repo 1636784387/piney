@@ -32,15 +32,10 @@ pub fn run() {
                 let current_dir = std::env::current_dir().unwrap_or_default();
 
                 // 1. 默认数据目录逻辑
-                let mut final_data_path = if cfg!(target_os = "macos") {
-                    // macOS: 默认使用 ~/Library/Application Support/com.piney.app
-                    _app.path()
-                        .app_data_dir()
-                        .expect("无法获取 macOS App Data 目录")
-                } else {
-                    // Windows/Linux: 默认使用当前目录下的 data (便携模式)
-                    std::path::PathBuf::from("data")
-                };
+                let mut final_data_path = _app
+                    .path()
+                    .app_data_dir()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("data"));
 
                 // 2. 特殊情况处理
                 // 如果当前目录下存在 data 文件夹，强制使用它（支持 macOS 便携模式）
