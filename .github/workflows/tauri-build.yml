@@ -37,7 +37,7 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
@@ -47,19 +47,17 @@ jobs:
       - name: Sync SvelteKit
         run: cd frontend && npx svelte-kit sync
 
-      - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v1
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          projectPath: './frontend'
           tagName: v${{ inputs.version }}
           releaseName: '小兄许 v${{ inputs.version }}'
           releaseBody: '下载对应平台的安装包进行安装。'
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-          tauriScript: cd frontend && npm run tauri
-          releaseAssetNamePattern: 'Piney_v[version]_macos_[arch][ext]'
 
   # Windows 构建
   build-windows:
@@ -89,7 +87,7 @@ jobs:
           targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
@@ -99,19 +97,17 @@ jobs:
       - name: Sync SvelteKit
         run: cd frontend && npx svelte-kit sync
 
-      - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v1
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          projectPath: './frontend'
           tagName: v${{ inputs.version }}
           releaseName: '小兄许 v${{ inputs.version }}'
           releaseBody: '下载对应平台的安装包进行安装。'
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-          tauriScript: cd frontend && npm run tauri
-          releaseAssetNamePattern: 'Piney_v[version]_windows_[arch][ext]'
 
   # Android 构建
   build-android:
@@ -125,7 +121,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -154,7 +150,7 @@ jobs:
           link-to-sdk: true
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
@@ -167,17 +163,15 @@ jobs:
       - name: Initialize Android project
         run: cd frontend && npm run tauri android init
 
-      - name: Build Tauri App (Android)
-        uses: tauri-apps/tauri-action@v1
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         with:
+          projectPath: './frontend'
           tagName: v${{ inputs.version }}
           releaseName: '小兄许 v${{ inputs.version }}'
           releaseBody: '下载对应平台的安装包进行安装。'
           releaseDraft: true
           prerelease: false
-          tauriScript: cd frontend && npm run tauri
           mobile: android
-          releaseAssetNamePattern: 'Piney_v[version]_android[ext]'
