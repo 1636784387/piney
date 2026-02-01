@@ -108,6 +108,7 @@ Please analyze the [User Requirement] carefully and output the character profile
 3.  **Language**: The content language must be **Simplified Chinese**.
 4.  **Placeholders**: You MUST use {{user}} to represent the user and {{char}} to represent the character in narrative fields (do not use the character's actual name for self-reference).
 5.  **Raw Text Only**: Do NOT use markdown code blocks (e.g., \\\`\\\`\\\`yaml). Do NOT use bolding or headers. Do NOT include conversational filler (e.g., "Okay, I will...", "Do you need anything else?"). **Directly output the raw YAML text.**
+6.  **Strict Termination (Anti-Bloat)**: You are strictly FORBIDDEN from adding any "Assistant", "Last_Action", or "Next_Suggestion" blocks at the end. **Stop generating immediately** after the last value in \`Speech_Mannerisms\`.
 
 ### Target Template Structure (For reference; remove text after # in output):
 Name: "" # Name, write directly, do not use {{char}} here
