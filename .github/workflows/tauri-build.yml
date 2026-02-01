@@ -19,9 +19,11 @@ jobs:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
             arch: 'arm64'
+            target: 'aarch64-apple-darwin'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
             arch: 'x64'
+            target: 'x86_64-apple-darwin'
     
     runs-on: ${{ matrix.platform }}
     permissions:
@@ -48,6 +50,9 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && npm install
 
+      - name: Sync SvelteKit
+        run: cd frontend && npx svelte-kit sync
+
       - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
@@ -57,7 +62,7 @@ jobs:
 
       - name: Rename Artifacts
         run: |
-          cd src-tauri/target/release/bundle/dmg
+          cd src-tauri/target/${{ matrix.target }}/release/bundle/dmg
           mv *.dmg Piney_v${{ inputs.version }}_macos_${{ matrix.arch }}.dmg
           echo "DMG_PATH=$(pwd)/Piney_v${{ inputs.version }}_macos_${{ matrix.arch }}.dmg" >> $GITHUB_ENV
 
@@ -79,9 +84,11 @@ jobs:
           - platform: 'windows-latest'
             args: '--target x86_64-pc-windows-msvc'
             arch: 'x64'
+            target: 'x86_64-pc-windows-msvc'
           - platform: 'windows-latest'
             args: '--target aarch64-pc-windows-msvc'
             arch: 'arm64'
+            target: 'aarch64-pc-windows-msvc'
     
     runs-on: ${{ matrix.platform }}
     permissions:
@@ -108,6 +115,9 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && npm install
 
+      - name: Sync SvelteKit
+        run: cd frontend && npx svelte-kit sync
+
       - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
@@ -117,7 +127,7 @@ jobs:
 
       - name: Rename Artifacts
         run: |
-          cd src-tauri/target/release/bundle/nsis
+          cd src-tauri/target/${{ matrix.target }}/release/bundle/nsis
           Get-ChildItem *.exe | Rename-Item -NewName "Piney_v${{ inputs.version }}_windows_${{ matrix.arch }}.exe"
           $exePath = Resolve-Path "Piney_v${{ inputs.version }}_windows_${{ matrix.arch }}.exe"
           echo "EXE_PATH=$exePath" >> $env:GITHUB_ENV
@@ -179,18 +189,28 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && npm install
 
+      - name: Sync SvelteKit
+        run: cd frontend && npx svelte-kit sync
+
       - name: Initialize Android project
         run: npm run tauri android init
 
       - name: Build Android APK
-        uses: tauri-apps/tauri-action@v0
+        run: npm run tauri android build
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Rename Artifacts
+        run: |
+          cd src-tauri/gen/android/app/build/outputs/apk/universal/release
+          mv *.apk Piney_v${{ inputs.version }}_android.apk
+          echo "APK_PATH=$(pwd)/Piney_v${{ inputs.version }}_android.apk" >> $GITHUB_ENV
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
         with:
-          tagName: v${{ inputs.version }}
-          releaseName: '小兄许 v${{ inputs.version }}'
-          releaseBody: '下载对应平台的安装包进行安装。'
-          releaseDraft: true
-          prerelease: false
-          mobile: android
+          tag_name: v${{ inputs.version }}
+          name: '小兄许 v${{ inputs.version }}'
+          draft: true
+          files: ${{ env.APK_PATH }}
