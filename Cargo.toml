@@ -16,7 +16,7 @@ repository = "https://github.com/piney/piney"
 # 异步运行时
 tokio = { version = "1.41", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io", "io-util", "compat"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Web 框架
 axum = { version = "0.8", features = ["macros", "multipart"] }

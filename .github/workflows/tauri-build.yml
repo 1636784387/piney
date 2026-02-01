@@ -1,34 +1,28 @@
-name: Build Tauri App
+name: 'Tauri Build'
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号（如 0.2.5），将用于 Release 标签'
+        description: '版本号（如 0.2.5）'
         required: true
-        default: ''
-        type: string
+        default: '0.2.5'
 
 jobs:
   # macOS 构建
   build-macos:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
-            arch: 'arm64'
-            target: 'aarch64-apple-darwin'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
-            arch: 'x64'
-            target: 'x86_64-apple-darwin'
     
     runs-on: ${{ matrix.platform }}
-    permissions:
-      contents: write
-    
     steps:
       - uses: actions/checkout@v4
 
@@ -54,46 +48,33 @@ jobs:
         run: cd frontend && npx svelte-kit sync
 
       - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tagName: v${{ inputs.version }}
+          releaseName: '小兄许 v${{ inputs.version }}'
+          releaseBody: '下载对应平台的安装包进行安装。'
+          releaseDraft: true
+          prerelease: false
           args: ${{ matrix.args }}
-
-      - name: Rename Artifacts
-        run: |
-          cd src-tauri/target/${{ matrix.target }}/release/bundle/dmg
-          mv *.dmg Piney_v${{ inputs.version }}_macos_${{ matrix.arch }}.dmg
-          echo "DMG_PATH=$(pwd)/Piney_v${{ inputs.version }}_macos_${{ matrix.arch }}.dmg" >> $GITHUB_ENV
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
-        with:
-          tag_name: v${{ inputs.version }}
-          name: '小兄许 v${{ inputs.version }}'
-          draft: true
-          files: ${{ env.DMG_PATH }}
+          tauriScript: cd frontend && npm run tauri
+          releaseAssetNamePattern: 'Piney_v[version]_macos_[arch][ext]'
 
   # Windows 构建
   build-windows:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: 'windows-latest'
             args: '--target x86_64-pc-windows-msvc'
-            arch: 'x64'
-            target: 'x86_64-pc-windows-msvc'
           - platform: 'windows-latest'
             args: '--target aarch64-pc-windows-msvc'
-            arch: 'arm64'
-            target: 'aarch64-pc-windows-msvc'
     
     runs-on: ${{ matrix.platform }}
-    permissions:
-      contents: write
-    
     steps:
       - uses: actions/checkout@v4
 
@@ -119,27 +100,18 @@ jobs:
         run: cd frontend && npx svelte-kit sync
 
       - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tagName: v${{ inputs.version }}
+          releaseName: '小兄许 v${{ inputs.version }}'
+          releaseBody: '下载对应平台的安装包进行安装。'
+          releaseDraft: true
+          prerelease: false
           args: ${{ matrix.args }}
-
-      - name: Rename Artifacts
-        run: |
-          cd src-tauri/target/${{ matrix.target }}/release/bundle/nsis
-          Get-ChildItem *.exe | Rename-Item -NewName "Piney_v${{ inputs.version }}_windows_${{ matrix.arch }}.exe"
-          $exePath = Resolve-Path "Piney_v${{ inputs.version }}_windows_${{ matrix.arch }}.exe"
-          echo "EXE_PATH=$exePath" >> $env:GITHUB_ENV
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
-        with:
-          tag_name: v${{ inputs.version }}
-          name: '小兄许 v${{ inputs.version }}'
-          draft: true
-          files: ${{ env.EXE_PATH }}
+          tauriScript: cd frontend && npm run tauri
+          releaseAssetNamePattern: 'Piney_v[version]_windows_[arch][ext]'
 
   # Android 构建
   build-android:
@@ -193,24 +165,19 @@ jobs:
         run: cd frontend && npx svelte-kit sync
 
       - name: Initialize Android project
-        run: npm run tauri android init
+        run: cd frontend && npm run tauri android init
 
-      - name: Build Android APK
-        run: npm run tauri android build
+      - name: Build Tauri App (Android)
+        uses: tauri-apps/tauri-action@v1
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-
-      - name: Rename Artifacts
-        run: |
-          cd src-tauri/gen/android/app/build/outputs/apk/universal/release
-          mv *.apk Piney_v${{ inputs.version }}_android.apk
-          echo "APK_PATH=$(pwd)/Piney_v${{ inputs.version }}_android.apk" >> $GITHUB_ENV
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
         with:
-          tag_name: v${{ inputs.version }}
-          name: '小兄许 v${{ inputs.version }}'
-          draft: true
-          files: ${{ env.APK_PATH }}
+          tagName: v${{ inputs.version }}
+          releaseName: '小兄许 v${{ inputs.version }}'
+          releaseBody: '下载对应平台的安装包进行安装。'
+          releaseDraft: true
+          prerelease: false
+          tauriScript: cd frontend && npm run tauri
+          mobile: android
+          releaseAssetNamePattern: 'Piney_v[version]_android[ext]'
