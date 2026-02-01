@@ -17,14 +17,14 @@ export const getApiBase = (): string => {
     return '';
 };
 
-// 缓存 API_BASE 值（首次调用时计算）
-let _apiBaseCache: string | null = null;
-export const API_BASE = (() => {
-    if (_apiBaseCache === null) {
-        _apiBaseCache = getApiBase();
+// 使用 Lazy 对象确保每次使用时才检测环境 (解决 Windows 启动时机问题)
+class LazyApiBase {
+    toString() {
+        return getApiBase();
     }
-    return _apiBaseCache;
-})();
+}
+// 欺骗 TypeScript 认为它是 string，实际上也是为了兼容模板字符串拼接
+export const API_BASE = new LazyApiBase() as unknown as string;
 
 /**
  * 智能解析 URL

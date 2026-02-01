@@ -55,32 +55,14 @@
         if (agreeing) return;
         agreeing = true;
         try {
-            const token = localStorage.getItem('auth_token');
-            // console.log("Submitting agreement with token:", token ? "Present" : "Missing");
-            
-            const headers: HeadersInit = {
-                "Content-Type": "application/json",
-            };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-
-            const res = await fetch("/api/settings", {
-                method: "PATCH",
-                headers,
-                body: JSON.stringify({
-                    user_agreement_accepted: true,
-                }),
+            const success = await settings.updateSettings({
+                user_agreement_accepted: true
             });
 
-            if (res.ok) {
-                await settings.loadSettings();
+            if (success) {
                 toast.success("已同意用户协议");
                 // Redirect to home or previous page
                 goto("/");
-            } else if (res.status === 401) {
-                toast.error("登录已过期，请重新登录");
-                auth.logout();
             } else {
                 toast.error("保存失败，请重试");
             }
