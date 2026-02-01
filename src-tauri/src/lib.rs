@@ -12,26 +12,38 @@ pub fn run() {
                 println!("Tauri 启动 CWD: {:?}", current_dir);
             }
 
-            // 优先级逻辑：
-            // 1. 如果当前目录是 src-tauri，优先看上级是否有 data (项目根目录)
-            // 2. 否则看当前目录下是否有 data
-            let current_dir = std::env::current_dir().unwrap_or_default();
-            let mut final_data_path = std::path::PathBuf::from("data");
-
-            if current_dir.ends_with("src-tauri") {
-                let parent_data = current_dir.parent().unwrap().join("data");
-                if parent_data.exists() {
-                    println!(
-                        "检测到处于 src-tauri 目录，优先使用项目根目录 data: {:?}",
-                        parent_data
-                    );
-                    final_data_path = parent_data;
+            // 移动端：使用系统分配的 App Data 目录（只有这里有读写权限）
+            #[cfg(mobile)]
+            {
+                use tauri::Manager;
+                let path = _app.path().app_data_dir().expect("无法获取 App Data 目录");
+                if !path.exists() {
+                    std::fs::create_dir_all(&path).expect("无法创建数据目录");
                 }
+                println!("移动端数据目录 DATA_DIR: {:?}", path);
+                std::env::set_var("DATA_DIR", path.to_string_lossy().to_string());
             }
 
-            let abs_data = std::fs::canonicalize(&final_data_path).unwrap_or(final_data_path);
-            println!("最终确定的数据目录 DATA_DIR: {:?}", abs_data);
-            std::env::set_var("DATA_DIR", abs_data.to_string_lossy().to_string());
+            // 桌面端：优先使用当前目录下的 data（便携/开发方便）
+            #[cfg(not(mobile))]
+            {
+                let current_dir = std::env::current_dir().unwrap_or_default();
+                let mut final_data_path = std::path::PathBuf::from("data");
+
+                if current_dir.ends_with("src-tauri") {
+                    let parent_data = current_dir.parent().unwrap().join("data");
+                    if parent_data.exists() {
+                        println!(
+                            "检测到处于 src-tauri 目录，优先使用项目根目录 data: {:?}",
+                            parent_data
+                        );
+                        final_data_path = parent_data;
+                    }
+                }
+                let abs_data = std::fs::canonicalize(&final_data_path).unwrap_or(final_data_path);
+                println!("最终确定的数据目录 DATA_DIR: {:?}", abs_data);
+                std::env::set_var("DATA_DIR", abs_data.to_string_lossy().to_string());
+            }
 
             // 启动后端服务（在单独的线程中）
             std::thread::spawn(|| {

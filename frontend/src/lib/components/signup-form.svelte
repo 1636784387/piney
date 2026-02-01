@@ -61,7 +61,7 @@
         >
     </Card.Header>
     <Card.Content>
-        <form onsubmit={handleSubmit}>
+        <form onsubmit={handleSubmit} novalidate>
             <Field.Group>
                 <Field.Field>
                     <Field.Label for="username">用户名</Field.Label>

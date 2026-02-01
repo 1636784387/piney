@@ -6,7 +6,7 @@
     import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldKeymap } from "@codemirror/language";
     import { lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
     import { indentWithTab } from "@codemirror/commands";
-    import { searchKeymap, SearchQuery, search, setSearchQuery, findNext, findPrevious } from "@codemirror/search";
+    import { SearchQuery, search, setSearchQuery, findNext, findPrevious } from "@codemirror/search";
     import { html } from "@codemirror/lang-html";
     import { css } from "@codemirror/lang-css";
     import { javascript } from "@codemirror/lang-javascript";

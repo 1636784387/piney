@@ -753,7 +753,7 @@
     }
 
     // ============ 无限滚动 ============
-    let sentinelEl: HTMLDivElement;
+    let sentinelEl = $state<HTMLDivElement>();
     let observer: IntersectionObserver | null = null;
     
     $effect(() => {

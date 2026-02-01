@@ -7,7 +7,7 @@
         "dev:backend": "cargo run",
         "build": "cd frontend && npm run build",
         "check": "cd frontend && npm run check",
-        "tauri": "cargo tauri",
+        "tauri": "./frontend/node_modules/.bin/tauri",
         "docker:build": "cd docker && docker-compose build",
         "docker:up": "cd docker && docker-compose up -d"
     },
