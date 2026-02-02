@@ -778,6 +778,7 @@
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            toast.success("导出成功 (请查看浏览器默认下载文件夹)");
         } catch (e) {
             toast.error("导出失败");
             console.error(e);

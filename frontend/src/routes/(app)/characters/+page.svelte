@@ -417,11 +417,12 @@
                 a.click();
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
-                toast.success("导出成功");
+                toast.success("导出成功 (共 1 个)");
 
             } else {
                 // Batch Export
-                toast.info("正在打包导出...");
+                const count = selectedCardIds.size;
+                toast.info(`正在打包导出 (共 ${count} 个)...`);
                 const ids = Array.from(selectedCardIds);
                 const res = await fetch(`${API_BASE}/api/cards/batch/export`, {
                     method: "POST",
@@ -446,7 +447,7 @@
                 a.click();
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
-                toast.success("批量导出成功");
+                toast.success(`批量导出成功 (共 ${count} 个)`);
             }
         } catch (e) {
             console.error(e);

@@ -208,17 +208,34 @@ pub async fn import_backup(
         if is_gzip {
             let decoder = GzDecoder::new(&data_clone[..]);
             let mut archive = Archive::new(decoder);
+
             // Fix: Windows extended path prefix (\\?\) causes tar unpack failure
-            let target_path = dunce::simplified(&data_dir_clone);
+            // Forcefully strip the prefix because tar-rs has issues with it
+            let target_path_buf = dunce::simplified(&data_dir_clone).to_path_buf();
+            let target_path_str = target_path_buf.to_string_lossy();
+            let clean_path = if target_path_str.starts_with("\\\\?\\") {
+                std::path::PathBuf::from(&target_path_str[4..])
+            } else {
+                target_path_buf
+            };
+
             archive
-                .unpack(target_path)
+                .unpack(&clean_path)
                 .map_err(|e| format!("Gzip解压失败: {}", e))?;
         } else {
             let mut archive = Archive::new(&data_clone[..]);
+
             // Fix: Windows extended path prefix (\\?\) causes tar unpack failure
-            let target_path = dunce::simplified(&data_dir_clone);
+            let target_path_buf = dunce::simplified(&data_dir_clone).to_path_buf();
+            let target_path_str = target_path_buf.to_string_lossy();
+            let clean_path = if target_path_str.starts_with("\\\\?\\") {
+                std::path::PathBuf::from(&target_path_str[4..])
+            } else {
+                target_path_buf
+            };
+
             archive
-                .unpack(target_path)
+                .unpack(&clean_path)
                 .map_err(|e| format!("Tar解压失败: {}", e))?;
         }
 
