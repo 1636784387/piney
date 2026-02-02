@@ -11,6 +11,10 @@ val tauriProperties = Properties().apply {
     if (propFile.exists()) {
         propFile.inputStream().use { load(it) }
     }
+    val localPropFile = project.rootProject.file("local.properties")
+    if (localPropFile.exists()) {
+        localPropFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -24,13 +28,28 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        create("release") {
+            val keystoreFile = tauriProperties.getProperty("key.store")
+            if (keystoreFile != null) {
+                storeFile = file(keystoreFile)
+                storePassword = tauriProperties.getProperty("key.store.password")
+                keyAlias = tauriProperties.getProperty("key.alias")
+                keyPassword = tauriProperties.getProperty("key.alias.password")
+            } else {
+                 println("Warning: key.store not found in tauri.properties/local.properties, skipping signing config.")
+            }
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
-            packaging {                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
+            packaging {
+                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
                 jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
@@ -38,6 +57,7 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
