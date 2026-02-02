@@ -62,7 +62,8 @@ pub fn run() {
                 std::env::set_var("DATA_DIR", abs_data.to_string_lossy().to_string());
             }
 
-            let log_path_clone = final_data_path.join("startup.log");
+            let data_dir_str = std::env::var("DATA_DIR").unwrap_or_else(|_| "./data".to_string());
+            let log_path_clone = std::path::PathBuf::from(data_dir_str).join("startup.log");
             let log = move |msg: &str| {
                 use std::io::Write;
                 if let Ok(mut file) = std::fs::OpenOptions::new()
