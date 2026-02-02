@@ -21,7 +21,7 @@ android {
     compileSdk = 36
     namespace = "com.piney.app"
     defaultConfig {
-        manifestPlaceholders["usesCleartextTraffic"] = "false"
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "com.piney.app"
         minSdk = 24
         targetSdk = 36
