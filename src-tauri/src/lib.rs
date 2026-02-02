@@ -1,7 +1,5 @@
 //! Tauri 库入口
 
-use tauri::Manager;
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -17,7 +15,6 @@ pub fn run() {
             // 移动端：使用系统分配的 App Data 目录（只有这里有读写权限）
             #[cfg(mobile)]
             {
-                use tauri::Manager;
                 let path = _app.path().app_data_dir().expect("无法获取 App Data 目录");
                 if !path.exists() {
                     std::fs::create_dir_all(&path).expect("无法创建数据目录");
