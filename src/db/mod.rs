@@ -4,7 +4,7 @@
 
 pub mod connection;
 
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use sea_orm_migration::MigratorTrait;
 use tracing::info;
 
@@ -108,54 +108,29 @@ pub async fn init_database() -> anyhow::Result<DatabaseConnection> {
 
     // 数据库文件路径
     let db_path = data_path.join("piney.db");
-    // Windows 下路径包含反斜杠，会导致 URL 解析错误，必须转换为正斜杠
-    let db_path_str = db_path.to_string_lossy().replace('\\', "/");
 
-    // 关键修正：手动创建文件，避免依赖 URL query 的 ?mode=rwc 解析（这在 Windows 下极易出错）
-    // 这种方式兼容 Win/Mac/Linux/Android
-    if !db_path.exists() {
-        info!("数据库文件不存在，预创建空文件: {:?}", db_path);
-        std::fs::File::create(&db_path)?;
-    }
+    // 关键修正：不再使用任何字符串拼接 URL，改用 Builder 模式直接配置
+    // 这样可以彻底规避 Windows 下 PathBuf -> URL String 过程中的盘符/斜杠解析 BUG
+    // 无论路径长什么样（盘符、中文、空格），sqlx 内部直接处理 PathBuf，不经过 URL parser
 
-    // 策略 A: 相对路径 (首选，避开盘符问题)
-    let current_dir = std::env::current_dir().unwrap_or_default();
-    let relative_url = if let Ok(rel_path) = db_path.strip_prefix(&current_dir) {
-        let rel_str = rel_path.to_string_lossy().replace('\\', "/");
-        Some(format!("sqlite:./{}", rel_str))
-    } else {
-        None
-    };
+    use sea_orm::sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    use sea_orm::SqlxSqliteConnector;
 
-    // 策略 B: 绝对路径 (备选，标准 URI)
-    let absolute_url = if cfg!(windows) {
-        format!("sqlite:///{}", db_path_str) // 3 slashes for Windows
-    } else {
-        format!("sqlite://{}", db_path_str) // 2 slashes for Unix
-    };
+    // 配置连接选项 (避开 format!("sqlite:...") )
+    let options = SqliteConnectOptions::new()
+        .filename(&db_path)
+        .create_if_missing(true);
 
-    info!("尝试数据库连接策略 A (相对路径): {:?}", relative_url);
+    info!("连接数据库 (Builder模式): {:?}", db_path);
 
-    // 执行连接尝试
-    let db = if let Some(url) = relative_url {
-        match Database::connect(&url).await {
-            Ok(conn) => {
-                info!("策略 A 连接成功");
-                conn
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "策略 A 连接失败 ({}), 切换到策略 B (绝对路径): {}",
-                    e,
-                    absolute_url
-                );
-                Database::connect(&absolute_url).await?
-            }
-        }
-    } else {
-        info!("直接使用策略 B (绝对路径): {}", absolute_url);
-        Database::connect(&absolute_url).await?
-    };
+    // 创建连接池
+    let pool = SqlitePoolOptions::new()
+        .connect_with(options)
+        .await
+        .map_err(|e| anyhow::anyhow!("数据库连接失败: {}", e))?;
+
+    // 转换为 SeaORM 连接
+    let db = SqlxSqliteConnector::from_sqlx_sqlite_pool(pool);
 
     // 开启 WAL 模式以提高并发性能，并设置 busy_timeout 防止锁竞争导致 500
     db.execute(Statement::from_string(
