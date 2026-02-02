@@ -6,7 +6,7 @@ on:
       version:
         description: '版本号（如 0.2.5）'
         required: true
-        default: '0.2.5'
+        default: ''
 
 jobs:
   # macOS 构建
@@ -108,4 +108,3 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-
