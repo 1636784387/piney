@@ -24,19 +24,9 @@ pub async fn create_app(db: DatabaseConnection, mode: RunMode, config: ConfigSta
     // CORS 配置
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([
-            axum::http::Method::GET,
-            axum::http::Method::POST,
-            axum::http::Method::PUT,
-            axum::http::Method::DELETE,
-            axum::http::Method::PATCH,
-            axum::http::Method::OPTIONS,
-        ])
-        .allow_headers([
-            axum::http::header::AUTHORIZATION,
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::ACCEPT,
-        ]);
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .expose_headers([axum::http::header::CONTENT_DISPOSITION]);
 
     // Public routes (Auth + Public Settings)
     let public_api = Router::new()

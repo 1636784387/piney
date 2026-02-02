@@ -613,8 +613,11 @@
             const a = document.createElement("a");
             a.href = url;
             
+            // 优先使用本地缓存的标题 (避免 WebView/Windows Header 解析问题)
+            const img = images.find(i => i.id === id);
+            let filename = img ? `${img.title}.png` : "image.png";
+
             const contentDisposition = res.headers.get("content-disposition");
-            let filename = "image.png";
             if (contentDisposition) {
                 const utf8Match = contentDisposition.match(/filename\*=UTF-8''(.+)/);
                 if (utf8Match) {
@@ -625,6 +628,18 @@
                         filename = filenameMatch[1];
                     }
                 }
+            }
+            
+            // 如果 Header 没解析出带扩展名的文件名，且本地有标题，确保扩展名正确
+            if (img && !filename.includes('.')) {
+                // Determine extension from content-type or default to png
+                const contentType = res.headers.get("content-type") || "";
+                let ext = "png";
+                if (contentType.includes("jpeg")) ext = "jpg";
+                else if (contentType.includes("webp")) ext = "webp";
+                else if (contentType.includes("gif")) ext = "gif";
+                
+                filename = `${img.title}.${ext}`;
             }
             a.download = filename;
             

@@ -5,11 +5,13 @@
 
 use axum::{
     body::Body,
-    extract::{Json, Multipart},
+    extract::{Json, Multipart, State},
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use chrono::Local;
+use sea_orm::DatabaseConnection;
+
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -128,8 +130,18 @@ pub async fn export_backup() -> Result<impl IntoResponse, (StatusCode, String)> 
 
 /// POST /api/backup/import - 导入 .piney 备份文件并恢复数据
 pub async fn import_backup(
+    State(db): State<DatabaseConnection>,
     mut multipart: Multipart,
 ) -> Result<Json<ImportResponse>, (StatusCode, String)> {
+    // 0. 关闭数据库连接 (Fix: Windows file lock issue)
+    // 必须确保在删除/覆盖 piney.db 前断开所有连接
+    // 注意：这将导致后续请求直到重启前都无法访问数据库，这是预期的
+    if let Err(e) = db.close().await {
+        // Log but continue, sometimes it might be already closed or fail to close cleanly
+        error!("尝试关闭数据库连接失败: {}", e);
+    }
+
+    // 1. 读取上传的文件
     // 1. 读取上传的文件
     let mut file_data: Option<Vec<u8>> = None;
 
@@ -207,36 +219,38 @@ pub async fn import_backup(
 
         if is_gzip {
             let decoder = GzDecoder::new(&data_clone[..]);
+            // Tar crate Archive takes a reader. We need to buffer it or read all.
+            // Since we already have data_clone as Vec<u8>, we can just decode it.
+            // Wait, Archive takes Read.
+            // unpack closure expects Archive<&[u8]>. GzDecoder is not &[u8].
+            // We need to decode Gzip first to use the same closure, OR make closure generic.
+
+            // Let's just inline logic to avoid complexity
             let mut archive = Archive::new(decoder);
-
-            // Fix: Windows extended path prefix (\\?\) causes tar unpack failure
-            // Forcefully strip the prefix because tar-rs has issues with it
-            let target_path_buf = dunce::simplified(&data_dir_clone).to_path_buf();
-            let target_path_str = target_path_buf.to_string_lossy();
-            let clean_path = if target_path_str.starts_with("\\\\?\\") {
-                std::path::PathBuf::from(&target_path_str[4..])
-            } else {
-                target_path_buf
-            };
-
-            archive
-                .unpack(&clean_path)
-                .map_err(|e| format!("Gzip解压失败: {}", e))?;
+            let entries = archive
+                .entries()
+                .map_err(|e| format!("读取归档失败: {}", e))?;
+            for entry in entries {
+                let mut entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+                entry.set_preserve_permissions(false);
+                entry.set_preserve_mtime(false);
+                entry
+                    .unpack_in(&data_dir_clone)
+                    .map_err(|e| format!("解压失败: {}", e))?;
+            }
         } else {
             let mut archive = Archive::new(&data_clone[..]);
-
-            // Fix: Windows extended path prefix (\\?\) causes tar unpack failure
-            let target_path_buf = dunce::simplified(&data_dir_clone).to_path_buf();
-            let target_path_str = target_path_buf.to_string_lossy();
-            let clean_path = if target_path_str.starts_with("\\\\?\\") {
-                std::path::PathBuf::from(&target_path_str[4..])
-            } else {
-                target_path_buf
-            };
-
-            archive
-                .unpack(&clean_path)
-                .map_err(|e| format!("Tar解压失败: {}", e))?;
+            let entries = archive
+                .entries()
+                .map_err(|e| format!("读取归档失败: {}", e))?;
+            for entry in entries {
+                let mut entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+                entry.set_preserve_permissions(false);
+                entry.set_preserve_mtime(false);
+                entry
+                    .unpack_in(&data_dir_clone)
+                    .map_err(|e| format!("解压失败: {}", e))?;
+            }
         }
 
         // C. 读取恢复后的 config.yml 中的用户名
