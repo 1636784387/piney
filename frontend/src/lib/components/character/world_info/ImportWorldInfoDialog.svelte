@@ -3,7 +3,6 @@
     import * as Dialog from "$lib/components/ui/dialog";
     import * as Select from "$lib/components/ui/select";
     import { Checkbox } from "$lib/components/ui/checkbox";
-    import { ScrollArea } from "$lib/components/ui/scroll-area";
     import { Loader2 } from "lucide-svelte";
     import { onMount } from "svelte";
     import { convertGlobalToCharacterBook, type CharacterBookEntry, type GlobalWorldInfo } from "$lib/worldInfoConverter";
@@ -184,7 +183,7 @@
                          </div>
                     </div>
                     
-                    <ScrollArea class="flex-1 h-[300px]">
+                    <div class="flex-1 overflow-y-auto h-[300px]">
                         <div class="space-y-1 p-1">
                             {#each Object.values(selectedWorldData.entries || {}) as entry (entry.uid)}
                                 <div class="flex items-start space-x-3 p-2 rounded hover:bg-muted/50 transition-colors">
@@ -212,7 +211,7 @@
                                 </div>
                             {/each}
                         </div>
-                    </ScrollArea>
+                    </div>
                  </div>
             {:else if loading && selectedWorldId}
                 <div class="flex items-center justify-center p-8 text-muted-foreground">

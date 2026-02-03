@@ -17,6 +17,7 @@ export interface RegexScript {
 interface ProcessOptions {
     isMarkdown?: boolean;
     isPrompt?: boolean;
+    noWrap?: boolean;
 }
 
 export function processContentWithScripts(content: string, scripts: RegexScript[], options: ProcessOptions = {}): string {
@@ -31,8 +32,12 @@ export function processContentWithScripts(content: string, scripts: RegexScript[
 
         try {
 
-            let pattern = script.findRegex;
+            // Fallback for SillyTavern format (regex / replace)
+            // @ts-ignore
+            let pattern = script.findRegex || script.regex;
             let flags = "g";
+
+            if (!pattern) continue;
 
             const trimmed = pattern.trim();
             // Robust parsing: Find the LAST slash that separates pattern and flags
@@ -41,7 +46,7 @@ export function processContentWithScripts(content: string, scripts: RegexScript[
                 const lastSlashIndex = trimmed.lastIndexOf("/");
                 const extractedPattern = trimmed.substring(1, lastSlashIndex);
                 const extractedFlags = trimmed.substring(lastSlashIndex + 1);
-                const validFlags = extractedFlags.split('').filter(c => "gimsuy".includes(c)).join('');
+                const validFlags = extractedFlags.split('').filter((c: string) => "gimsuy".includes(c)).join('');
 
                 pattern = extractedPattern;
                 flags = validFlags || "g";
@@ -49,14 +54,15 @@ export function processContentWithScripts(content: string, scripts: RegexScript[
 
             const regex = new RegExp(pattern, flags);
 
-            let replacement = script.replaceString || "";
+            // @ts-ignore
+            let replacement = script.replaceString || script.replace || "";
 
             replacement = replacement
                 .replace(/\\n/g, '\n')
                 .replace(/\\r/g, '\r')
                 .replace(/\\t/g, '\t')
                 .replace(/\\"/g, '"');
-            if (replacement.trim()) {
+            if (replacement.trim() && !options.noWrap) {
                 replacement = `<piney_render>\n${replacement}\n</piney_render>`;
             }
 

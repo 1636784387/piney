@@ -5,7 +5,6 @@
     import { Checkbox } from "$lib/components/ui/checkbox";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
-    import { ScrollArea } from "$lib/components/ui/scroll-area";
     import { Tabs, TabsContent, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
     import { Loader2 } from "lucide-svelte";
     import { convertCharacterBookToGlobal, type CharacterBookEntry, type GlobalWorldInfo } from "$lib/worldInfoConverter";
@@ -33,7 +32,16 @@
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
-                worldInfos = await res.json();
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    worldInfos = data;
+                } else if (data.items && Array.isArray(data.items)) {
+                    worldInfos = data.items;
+                } else if (data.data && Array.isArray(data.data)) {
+                     worldInfos = data.data;
+                } else {
+                    worldInfos = [];
+                }
             }
         } catch (e) {
             console.error(e);
@@ -204,7 +212,7 @@
                      </div>
                 </div>
                 
-                <ScrollArea class="flex-1 h-[200px]">
+                <div class="flex-1 overflow-y-auto h-[200px]">
                     <div class="space-y-1 p-1">
                         {#each entries as entry (entry.id)}
                             <div class="flex items-start space-x-3 p-2 rounded hover:bg-muted/50 transition-colors">
@@ -232,7 +240,7 @@
                             </div>
                         {/each}
                     </div>
-                </ScrollArea>
+                </div>
              </div>
 
              <!-- Export Options -->

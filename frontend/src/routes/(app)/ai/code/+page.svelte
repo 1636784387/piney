@@ -267,8 +267,8 @@
                  <div style="font-size:24px;margin-bottom:12px;">⚠️</div>
                  <div style="font-weight:bold;margin-bottom:8px;font-size:16px;">正则匹配失败</div>
                  <div style="font-size:13px;opacity:0.8;line-height:1.5;">
-                    原始内容与正则规则不兼容。<br>
-                    请点击下方的"修复"按钮，让 AI 自动修正。
+                    原始内容与正则规则不兼容。你可以手动按照世界书条目中的要求更改原始内容（推荐）<br>
+                    也可以点击下方的"修复"按钮，让 AI 自动修正。
                  </div>
                </div>
             </div>`;

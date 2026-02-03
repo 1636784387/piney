@@ -15,7 +15,9 @@ export function renderContent(text: string, cardRegex: RegexScript[] = []): stri
         .replace(/\\n/g, '\n'); // Handle literal \n
 
     // 2. 正则替换 (仅角色卡正则)
-    res = processContentWithScripts(res, cardRegex);
+    // 禁用 piney_render 包装，因为这里是直接 DOM 操作，不需要标签保护
+    // 启用 Markdown 模式，因为大多数显示类正则脚本都标记为 markdownOnly
+    res = processContentWithScripts(res, cardRegex, { noWrap: true, isMarkdown: true });
 
     // 3. 清理标签间的换行 (不要在标签之间加换行，例如 </div><content>)
     res = res.replace(/>\s*\n\s*</g, '><');
@@ -39,6 +41,15 @@ export function renderContent(text: string, cardRegex: RegexScript[] = []): stri
         return `<pre><code${langClass}>${escaped}</code></pre>`;
     });
 
+    // 5.5 保护 <script> 标签
+    // Prevent innerHTML from mangling script content or executing it prematurely during sanitization
+    const scriptBlocks: string[] = [];
+    res = res.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, (match) => {
+        const idx = scriptBlocks.length;
+        scriptBlocks.push(match);
+        return `<!--PINEY_SCRIPT_${idx}-->`;
+    });
+
     // 6. DOM 操作与净化
     const container = document.createElement('div');
     container.innerHTML = res;
@@ -55,9 +66,23 @@ export function renderContent(text: string, cardRegex: RegexScript[] = []): stri
     // 保留段落间距.
     html = html.replace(/(<br\s*\/?>\s*){2,}/gi, '<br><br>');
 
+    // 8.5 恢复 <script> 标签
+    scriptBlocks.forEach((block, idx) => {
+        const placeholder = `<!--PINEY_SCRIPT_${idx}-->`;
+        // Use replace to put back the script tag
+        html = html.replace(placeholder, block);
+    });
+
     // 9. 注入基础样式 (通过内联 style 标签)
+    // 注入 jQuery, FontAwesome, Animate.css 以支持常见的角色卡脚本和样式
     const styleBlock = `
+        <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
         <style>
+            :root {
+                color-scheme: light dark;
+            }
             html, body { 
                 background: transparent !important;
                 margin: 0;
@@ -65,9 +90,13 @@ export function renderContent(text: string, cardRegex: RegexScript[] = []): stri
                 line-height: 1.5; 
                 color: #000000;
                 font-family: ui-sans-serif, system-ui, sans-serif;
+                transition: color 0.3s ease;
             }
             html.dark body {
                 color: #e0e0e0;
+            }
+            html.dark {
+                color-scheme: dark;
             }
             
             code { 
@@ -103,6 +132,44 @@ export function renderContent(text: string, cardRegex: RegexScript[] = []): stri
             
             del { color: #888; text-decoration: line-through; }
         </style>
+        <script id="piney-preview-script">
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'TH_UPDATE_CONTENT') {
+                    // 1. Handle Dark Mode
+                    if (event.data.isDark) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+
+                    // 2. Handle Content Update (and force script execution)
+                    // Only update if content is provided and different?
+                    // HTMLRender sends content on every update.
+                    if (event.data.content) {
+                         const parser = new DOMParser();
+                         const doc = parser.parseFromString(event.data.content, 'text/html');
+                         
+                         // We can't just set innerHTML because scripts won't run.
+                         // We also want to preserve this system script listener.
+                         // The content from textRenderer includes the system script, style, and content div.
+                         
+                         // Strategy: update body, then find and reactive user scripts.
+                         document.body.innerHTML = event.data.content;
+                         
+                         // Re-activate scripts (excluding this one)
+                         const scripts = document.body.querySelectorAll('script:not(#piney-preview-script)');
+                         scripts.forEach(oldScript => {
+                             const newScript = document.createElement('script');
+                             Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                             newScript.textContent = oldScript.textContent;
+                             if (oldScript.parentNode) {
+                                oldScript.parentNode.replaceChild(newScript, oldScript);
+                             }
+                         });
+                    }
+                }
+            });
+        </script>
     `;
 
     return styleBlock + `<div style="padding: 1rem;">${html}</div>`;
