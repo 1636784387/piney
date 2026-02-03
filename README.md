@@ -2,6 +2,8 @@
 
 小兄许（Piney）是一个 SillyTavern 角色卡工作站。
 
+详细介绍请查看：[小兄许详细介绍](doc/piney.md)
+
 ## 安装部署
 
 ### Docker部署
