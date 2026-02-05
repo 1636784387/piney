@@ -51,7 +51,9 @@
         "svelte-dnd-action": "^0.9.69",
         "svelte-easy-crop": "^5.0.0",
         "tailwind-merge": "^3.4.0",
-        "thememirror": "^2.0.1"
+        "thememirror": "^2.0.1",
+        "@tauri-apps/plugin-fs": "^2.0.0",
+        "@tauri-apps/plugin-dialog": "^2.0.0"
     },
     "type": "module"
 }

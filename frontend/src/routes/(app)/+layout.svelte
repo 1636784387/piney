@@ -31,7 +31,7 @@
     <AppSidebar />
     <Sidebar.Inset>
         <header
-            class="flex h-12 shrink-0 items-center gap-2 border-b border-border transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
+            class="flex h-auto min-h-12 pt-[env(safe-area-inset-top)] shrink-0 items-center gap-2 border-b border-border transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-auto"
         >
             <div class="flex items-center gap-2 px-4">
                 <SidebarTrigger class="-ml-1" />

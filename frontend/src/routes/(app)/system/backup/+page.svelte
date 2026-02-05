@@ -15,6 +15,8 @@
     let selectedFile: File | null = null;
     let fileInput: HTMLInputElement;
 
+    import { downloadFile } from "$lib/utils/download";
+
     // --- 导出备份 ---
     let isExporting = false;
     
@@ -22,45 +24,25 @@
         if (isExporting) return;
         isExporting = true;
         
-        const loadingToast = toast.loading("正在准备导出...", { duration: Infinity });
-        
         try {
             const token = localStorage.getItem("auth_token");
             if (!token) {
                 toast.error("未登录");
                 isExporting = false;
-                toast.dismiss(loadingToast);
                 return;
             }
 
-            // 直接通过浏览器导航触发下载（流式传输关键）
-            // 附带 token 作为 query param 进行鉴权
-            const downloadUrl = `${API_BASE}/api/backup/export?token=${encodeURIComponent(token)}`;
-            
-            // 创建隐藏的 a 标签点击下载
-            const a = document.createElement("a");
-            a.href = downloadUrl;
-            a.download = "piney_backup.piney"; // 浏览器会优先使用 Content-Disposition 中的文件名，这里只是 fallback
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            
-            // 给予一点延迟提示完成，实际上浏览器已经接管下载
-            setTimeout(() => {
-                toast.dismiss(loadingToast);
-                toast.success("请求已发送", {
-                    description: "下载即将开始，请留意浏览器下载提示",
-                    duration: 5000,
-                });
-                isExporting = false;
-            }, 1000);
-
-            /* fetch 方式会导致 buffering，废弃
-            const res = await fetch(`${API_BASE}/api/backup/export`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            // 使用统一下载工具
+            // 注意：这里我们让 downloadFile 自己处理 "已触发下载" 的提示
+            await downloadFile({
+                filename: "piney_backup.piney",
+                url: `${API_BASE}/api/backup/export?token=${encodeURIComponent(token)}`,
+                type: "application/octet-stream"
             });
-            ...
-            */
+            
+        } catch(e) {
+            console.error(e);
+            toast.error("导出请求失败");
         } finally {
             isExporting = false;
         }

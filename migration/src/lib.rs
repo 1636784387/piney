@@ -5,12 +5,16 @@
 pub use sea_orm_migration::prelude::*;
 
 mod m000001_v1_init;
+mod m000002_add_avatar_version;
 
 pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(m000001_v1_init::Migration)]
+        vec![
+            Box::new(m000001_v1_init::Migration),
+            Box::new(m000002_add_avatar_version::Migration),
+        ]
     }
 }

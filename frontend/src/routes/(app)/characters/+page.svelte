@@ -18,6 +18,7 @@
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
     import * as AlertDialog from "$lib/components/ui/alert-dialog";
+    import { downloadFile } from "$lib/utils/download";
     import { longpress } from "$lib/actions/longpress";
     import { API_BASE, resolveUrl } from "$lib/api";
     import { breadcrumbs } from "$lib/stores/breadcrumb";
@@ -56,6 +57,7 @@
         description: string | null;
         author: string | null;
         avatar: string | null;
+        avatar_version: number;
         category_id: string | null;
         tags: string[];
         rating: number;
@@ -83,10 +85,34 @@
     let moveDialogOpen = $state(false);
     let targetCategoryId: string | null = $state(null);
 
+    // Data from load function
+    let { data } = $props();
     let categories: Category[] = $state([]);
-    let cards: CardItem[] = $state([]);
-    let allTags: string[] = $state([]);
-    let tagCounts: Record<string, number> = $state({});
+    let cards: CardItem[] = $state([]); // 服务端分页数据
+    let serverPagination = $state({ total: 0, page: 1, pageSize: 20, totalPages: 1 });
+    let tagStats: Record<string, number> = $state({});
+    let totalCardsCount = $state(0);
+
+    // 同步 load 函数返回的数据
+    $effect(() => {
+        if (data.preloaded) {
+            categories = data.categories || [];
+            cards = data.cards || [];
+            serverPagination = data.pagination || { total: 0, page: 1, pageSize: 20, totalPages: 1 };
+            tagStats = data.tagStats || {};
+            totalCardsCount = data.totalCards || 0;
+        }
+    });
+
+
+    // Tag Analysis (从服务端获取)
+    let allTags: string[] = $derived.by(() => {
+        return Object.keys(tagStats).sort();
+    });
+    
+    let tagCounts: Record<string, number> = $derived.by(() => {
+        return tagStats;
+    });
 
     let loading = $state(true);
     let newCategoryName = $state("");
@@ -111,9 +137,11 @@
     // 分页状态
     let currentPage = $state(1);
     let pageSize = $state(20);
-    let totalItems = $state(0);
-    let totalPages = $state(0);
+    // Derived pagination stats
     let jumpToPage = $state(1); // For the input field
+
+    // 新建角色卡
+    let isCreating = $state(false);
 
     // ============ API 调用 ============
     async function fetchCategories() {
@@ -130,8 +158,6 @@
         }
     }
 
-    // 新建角色卡
-    let isCreating = $state(false);
     async function createCard() {
         if (!newCardName.trim()) {
             toast.error("角色名称不能为空");
@@ -168,66 +194,57 @@
     }
 
     async function fetchCards() {
+        loading = true;
         try {
             const token = localStorage.getItem("auth_token");
-            let url = `${API_BASE}/api/cards`;
             const params = new URLSearchParams();
-            if (selectedCategoryId)
-                params.set("category_id", selectedCategoryId);
-            if (searchQuery) params.set("search", searchQuery);
-            
-            // Pagination params
-            params.set("page", currentPage.toString());
-            params.set("page_size", pageSize.toString());
+            if (selectedCategoryId) params.set('category_id', selectedCategoryId);
+            if (searchQuery) params.set('search', searchQuery);
+            params.set('page', String(currentPage));
+            params.set('page_size', String(pageSize));
+            params.set('sort', currentSort);
+            params.set('order', currentOrder);
 
-            // Sorting params
-            params.set("sort", currentSort);
-            params.set("order", currentOrder);
-
-            if (params.toString()) url += `?${params.toString()}`;
-
-            const res = await fetch(url, {
+            const res = await fetch(`${API_BASE}/api/cards/all?${params.toString()}`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
                 const data = await res.json();
-                
-                // Handle paginated response
-                if (data.items) {
-                    cards = data.items;
-                    totalItems = data.total;
-                    currentPage = data.page;
-                    pageSize = data.page_size;
-                    totalPages = data.total_pages;
-                    jumpToPage = currentPage;
-                } else {
-                    // Fallback for old API if something goes wrong (should not happen with updated backend)
-                    cards = data;
-                    totalItems = cards.length;
-                    totalPages = 1;
-                }
-
-                // Collect tags from current page (or should it be all? Usually all is better for sidebar, but API only returns page. 
-                // Note: Tag stats might only reflect current page now, which is a trade-off unless we have a separate tags API)
-                // For now, we calculate from visible cards.
-                const counts: Record<string, number> = {};
-                const tagSet = new Set<string>();
-                cards.forEach((c) => {
-                    c.tags.forEach((t) => {
-                        tagSet.add(t);
-                        counts[t] = (counts[t] || 0) + 1;
-                    });
-                });
-                
-                // If we want comprehensive tags, we might need a separate API call. 
-                // But for now, let's keep it based on visible cards or accept limitation.
-                // Or maybe we should append tags? No, let's stick to visible.
-                allTags = Array.from(tagSet).sort();
-                tagCounts = counts;
+                cards = data.items;
+                serverPagination = {
+                    total: data.total,
+                    page: data.page,
+                    pageSize: data.page_size,
+                    totalPages: data.total_pages
+                };
             }
         } catch (e) {
             console.error("获取角色卡失败", e);
+        } finally {
+            loading = false;
+            listNeedsRefresh.set(false);
         }
+    }
+
+    async function fetchTagStats() {
+        try {
+            const token = localStorage.getItem("auth_token");
+            const res = await fetch(`${API_BASE}/api/cards/stats/tags`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (res.ok) {
+                const data = await res.json();
+                tagStats = data.tags;
+                totalCardsCount = data.total_cards;
+            }
+        } catch (e) {
+            console.error("获取标签统计失败", e);
+        }
+    }
+
+    // Refresh function calls
+    async function refreshData() {
+        await Promise.all([fetchCategories(), fetchCards(), fetchTagStats()]);
     }
 
     async function createCategory() {
@@ -280,7 +297,7 @@
 
     async function deleteCategory(id: string) {
         const cat = categories.find((c) => c.id === id);
-        const cardCount = cards.filter((c) => c.category_id === id).length;
+        const cardCount = cards.filter((c: CardItem) => c.category_id === id).length;
 
         if (cardCount > 0) {
             const confirmed = confirm(
@@ -315,7 +332,7 @@
                 body: JSON.stringify({ cover_blur: !card.cover_blur }),
             });
             card.cover_blur = !card.cover_blur;
-            cards = [...cards]; // 触发响应式更新
+            // cards = [...cards]; // Trigger reactivity if needed (but we use derived now)
         } catch (e) {
             toast.error("更新失败");
         }
@@ -392,62 +409,54 @@
         if (selectedCardIds.size === 0) return;
         
         try {
+
             const token = localStorage.getItem("auth_token");
             if (selectedCardIds.size === 1) {
                 // Single Export
                 const id = Array.from(selectedCardIds)[0];
-                const card = cards.find(c => c.id === id);
-                const name = card ? card.name : "character";
-
+                const card = cards.find((c: CardItem) => c.id === id);
+                let name = card ? card.name : "character";
+                
+                // 为了获取准确的文件名(特别是扩展名)，先 fetch Blob
+                // downloadFile 支持直接传 content: Blob
                 const res = await fetch(`${API_BASE}/api/cards/${id}/export`, {
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
                 });
                 if (!res.ok) throw new Error("导出失败");
                 
                 const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
                 
                 const contentType = res.headers.get("content-type") || "";
                 const ext = contentType.includes("application/json") ? "json" : "png";
                 
-                a.download = `${name}.${ext}`; 
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                toast.success("导出成功 (共 1 个)");
+                await downloadFile({
+                    filename: `${name}.${ext}`,
+                    content: blob
+                });
+                
+                // toast.success("导出成功 (共 1 个)");
 
             } else {
-                // Batch Export
+                // Batch Export (URL Stream POST)
                 const count = selectedCardIds.size;
                 toast.info(`正在打包导出 (共 ${count} 个)...`);
                 const ids = Array.from(selectedCardIds);
-                const res = await fetch(`${API_BASE}/api/cards/batch/export`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({ ids }),
+                
+                await downloadFile({
+                    filename: `batch_export_${new Date().toISOString().slice(0, 10)}.zip`,
+                    url: `${API_BASE}/api/cards/batch/export`,
+                    type: 'application/zip',
+                    fetchOptions: {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        },
+                        body: JSON.stringify({ ids }),
+                    }
                 });
 
-                if (!res.ok) {
-                    const errText = await res.text();
-                    throw new Error(errText || "Export failed");
-                }
-
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `batch_export_${new Date().toISOString().slice(0, 10)}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                toast.success(`批量导出成功 (共 ${count} 个)`);
+                // toast.success(`批量导出中 (共 ${count} 个)`);
             }
         } catch (e) {
             console.error(e);
@@ -566,60 +575,70 @@
         
         // 检查是否需要刷新（如封面更新后返回）
         if ($listNeedsRefresh) {
-            listNeedsRefresh.set(false);
-            await Promise.all([fetchCategories(), fetchCards()]);
-            loading = false;
-            return;
-        }
-        
-        // 使用预加载数据（如果存在）
-        const preloaded = $page.data;
-        if (preloaded?.preloaded) {
-            categories = preloaded.categories || [];
-            const data = preloaded.cardsData;
-            if (data?.items) {
-                cards = data.items;
-                totalItems = data.total;
-                currentPage = data.page;
-                pageSize = data.page_size;
-                totalPages = data.total_pages;
-                
-                // 计算标签统计
-                const counts: Record<string, number> = {};
-                const tagSet = new Set<string>();
-                cards.forEach((c) => {
-                    c.tags.forEach((t) => {
-                        tagSet.add(t);
-                        counts[t] = (counts[t] || 0) + 1;
-                    });
-                });
-                allTags = Array.from(tagSet).sort();
-                tagCounts = counts;
-            }
+            await refreshData();
+        } else if (data.preloaded) {
+            // Already loaded via +page.ts, just sync state if needed
             loading = false;
         } else {
-            // 回退到传统加载方式
-            await Promise.all([fetchCategories(), fetchCards()]);
-            loading = false;
+            // Fallback
+            await refreshData();
         }
     });
 
-    // ============ 响应式 ============
-    let filteredCards = $derived(
-        cards.filter((card) => {
-            if (
-                selectedTags.length > 0 &&
-                !selectedTags.some((t) => card.tags.includes(t))
-            ) {
-                return false;
+    // ============ 响应式 (核心逻辑) ============
+    
+    // 服务端分页，不再客户端过滤/排序
+    // 标签过滤仍然在客户端处理（因为服务端不支持多标签过滤）
+    let paginatedCards = $derived.by(() => {
+        let result = cards;
+        
+        // 标签过滤（客户端）
+        if (selectedTags.length > 0) {
+            result = result.filter(c => selectedTags.some(t => c.tags.includes(t)));
+        }
+        
+        return result;
+    });
+
+    // Pagination Stats (从服务端数据)
+    let totalItems = $derived(serverPagination.total);
+    let totalPages = $derived(serverPagination.totalPages);
+
+    // 当筛选条件变化时重新请求服务端数据
+    let prevSearch = '';
+    let prevCategory: string | null = null;
+    let prevSort = 'updated_at';
+    let prevOrder = 'desc';
+    let prevPage = 1;
+    
+    $effect(() => {
+        // 检测筛选参数变化
+        const searchChanged = searchQuery !== prevSearch;
+        const categoryChanged = selectedCategoryId !== prevCategory;
+        const sortChanged = currentSort !== prevSort;
+        const orderChanged = currentOrder !== prevOrder;
+        const pageChanged = currentPage !== prevPage;
+        
+        if (searchChanged || categoryChanged || sortChanged || orderChanged || pageChanged) {
+            // 如果是筛选变化（非分页），重置页码
+            if ((searchChanged || categoryChanged || sortChanged || orderChanged) && !pageChanged) {
+                currentPage = 1;
             }
-            return true;
-        }),
-    );
+            
+            prevSearch = searchQuery;
+            prevCategory = selectedCategoryId;
+            prevSort = currentSort;
+            prevOrder = currentOrder;
+            prevPage = currentPage;
+            
+            // 触发服务端请求
+            fetchCards();
+        }
+    });
+
 
     function selectCategory(id: string | null) {
         selectedCategoryId = id;
-        fetchCards();
     }
 
     function toggleTag(tag: string) {
@@ -634,18 +653,12 @@
         selectedTags = [];
     }
 
-    let searchTimeout: any;
-    function handleSearch() {
-        currentPage = 1;
-        fetchCards();
-    }
-    
+    // Search input handler (debounce unnecessary for local data usually, but kept for UI response)
+    // Actually no need for debounce with local filter, derived is fast enough.
     function onSearchInput() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            handleSearch();
-        }, 300);
+        // No-op, bind:value triggers derived
     }
+
 </script>
 
 <div class="container py-6 space-y-6 max-w-7xl mx-auto">
@@ -654,7 +667,7 @@
         <div class="space-y-1">
             <h1 class="text-2xl font-bold tracking-tight">我的角色</h1>
             <p class="text-muted-foreground">
-                管理 {totalItems} 个角色卡
+                管理 {totalCardsCount} 个角色卡
             </p>
         </div>
         <div class="flex gap-2">
@@ -725,7 +738,6 @@
                             currentSort = "updated_at";
                             currentOrder = "desc";
                             currentPage = 1;
-                            fetchCards();
                         }}
                     >
                         最后更新 (默认)
@@ -736,7 +748,6 @@
                             currentSort = "created_at";
                             currentOrder = "desc";
                             currentPage = 1;
-                            fetchCards();
                         }}
                     >
                         创建时间 (最新)
@@ -747,7 +758,6 @@
                             currentSort = "created_at";
                             currentOrder = "asc";
                             currentPage = 1;
-                            fetchCards();
                         }}
                     >
                         创建时间 (最早)
@@ -758,7 +768,6 @@
                             currentSort = "name";
                             currentOrder = "asc";
                             currentPage = 1;
-                            fetchCards();
                         }}
                     >
                         名称 (A-Z)
@@ -843,7 +852,7 @@
                         class="flex-1 h-11 bg-primary text-primary-foreground hover:bg-primary/90"
                         onclick={() => (filterOpen = false)}
                     >
-                        确认 ({filteredCards.length})
+                        确认 ({paginatedCards.length})
                     </Button>
                 </div>
             </Sheet.Content>
@@ -1036,7 +1045,7 @@
                 </div>
             {/each}
         </div>
-    {:else if filteredCards.length === 0}
+    {:else if paginatedCards.length === 0}
         <div class="text-center py-20 text-muted-foreground">
             <p>暂无角色卡</p>
         </div>
@@ -1045,7 +1054,7 @@
         <div
             class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5"
         >
-            {#each filteredCards as card (card.id)}
+            {#each paginatedCards as card (card.id)}
                 <ContextMenu.Root>
                     <ContextMenu.Trigger>
                         <div
@@ -1097,7 +1106,7 @@
                             <!-- 封面图容器 -->
                             <div class="aspect-[2/3] relative overflow-hidden">
                                 <img
-                                    src={resolveUrl(card.avatar ? `${card.avatar}?v=${new Date(card.updated_at).getTime()}` : "/default.webp")}
+                                    src={resolveUrl(card.avatar ? `${card.avatar}?v=${card.avatar_version || 1}` : "/default.webp")}
                                     alt={card.name}
                                     decoding="async"
                                     loading="lazy"
@@ -1327,7 +1336,9 @@
     {:else}
         <!-- 列表视图 -->
         <div class="space-y-2">
-            {#each filteredCards as card (card.id)}
+
+            {#each paginatedCards as card (card.id)}
+
                 <ContextMenu.Root>
                     <ContextMenu.Trigger>
                         <div
@@ -1356,7 +1367,7 @@
                                 class="w-10 h-14 rounded overflow-hidden bg-muted flex-shrink-0"
                             >
                                 <img
-                                    src={resolveUrl(card.avatar ? `${card.avatar}?v=${new Date(card.updated_at).getTime()}` : "/default.webp")}
+                                    src={resolveUrl(card.avatar ? `${card.avatar}?v=${card.avatar_version || 1}` : "/default.webp")}
                                     alt={card.name}
                                     class={cn(
                                         "w-full h-full object-cover",
@@ -1465,7 +1476,6 @@
                         disabled={currentPage <= 1}
                         onclick={() => {
                             currentPage--;
-                            fetchCards();
                         }}
                         class="flex-1 sm:flex-none"
                     >
@@ -1483,7 +1493,6 @@
                         disabled={currentPage >= totalPages}
                         onclick={() => {
                             currentPage++;
-                            fetchCards();
                         }}
                         class="flex-1 sm:flex-none"
                     >
@@ -1507,7 +1516,6 @@
                                 if (p > totalPages) p = totalPages;
                                 currentPage = p;
                                 jumpToPage = p;
-                                fetchCards();
                             }
                         }}
                     />
@@ -1522,7 +1530,6 @@
                                 if (p > totalPages) p = totalPages;
                                 currentPage = p;
                                 jumpToPage = p;
-                                fetchCards();
                         }}
                     >
                         跳转

@@ -1,0 +1,1 @@
+CWD: "/Users/lillian/github/piney/src-tauri"

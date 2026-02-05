@@ -23,6 +23,7 @@
     import TheaterCard from "$lib/components/theater/TheaterCard.svelte";
     import CreateTheaterDialog from "$lib/components/theater/CreateTheaterDialog.svelte";
     import ImportTheaterDialog from "$lib/components/theater/ImportTheaterDialog.svelte";
+    import { downloadFile } from "$lib/utils/download";
 
     // 状态
     let theaters: any[] = $state([]);
@@ -144,23 +145,19 @@
                 url += `?ids=${Array.from(selectedIds).join(',')}`;
             }
 
-            const res = await fetch(url, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            // Since this returns a file stream, we can use downloadFile with url
+            // But we might want headers for auth.
+            // downloadFile supports fetchOptions (which we added).
+            
+            await downloadFile({
+                filename: `theaters_${new Date().toISOString().slice(0, 10)}.txt`, // API likely returns txt
+                url: url,
+                fetchOptions: {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                }
             });
             
-            if (!res.ok) throw new Error("导出失败");
-            
-            const blob = await res.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = downloadUrl;
-            a.download = `theaters_${new Date().toISOString().slice(0, 10)}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(downloadUrl);
-            document.body.removeChild(a);
-            
-            toast.success("导出成功");
+            // toast.success("导出成功");
             cancelExportMode();
         } catch (e) {
             console.error(e);

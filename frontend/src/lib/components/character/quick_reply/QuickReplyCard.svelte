@@ -6,6 +6,7 @@
     import { cn } from "$lib/utils";
     import { toast } from "svelte-sonner";
     import { API_BASE } from "$lib/api";
+    import { downloadFile } from "$lib/utils/download";
     import RenameQuickReplyDialog from "./RenameQuickReplyDialog.svelte";
 
     let { quickReply, cardId, onDelete, onUpdate } = $props();
@@ -41,16 +42,14 @@
             if (!res.ok) throw new Error("导出失败");
             
             const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${quickReply.display_name}.json`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
             
-            toast.success("导出成功");
+            await downloadFile({
+                filename: `${quickReply.display_name}.json`,
+                content: blob,
+                type: "application/json"
+            });
+            
+            // toast.success("导出成功", { description: "已保存文件" });
         } catch (e) {
             console.error(e);
             toast.error("导出失败");

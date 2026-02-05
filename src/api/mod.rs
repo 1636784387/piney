@@ -39,6 +39,8 @@ pub fn routes(db: DatabaseConnection) -> Router {
         // 上传
         .route("/upload", post(upload::upload_image))
         // 角色卡
+        .route("/cards/all", get(cards::list_all))
+        .route("/cards/stats/tags", get(cards::tag_stats))
         .route("/cards", get(cards::list))
         .route("/cards/import", post(cards::import))
         .route("/cards/debug_import", post(cards::debug_import))

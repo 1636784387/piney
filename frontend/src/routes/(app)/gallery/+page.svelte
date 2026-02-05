@@ -34,6 +34,7 @@
     import { dndzone, TRIGGERS } from "svelte-dnd-action";
     import { flip } from "svelte/animate";
     import { longpress } from "$lib/actions/longpress";
+    import { downloadFile } from "$lib/utils/download";
 
     // ============ 类型定义 ============
     interface Category {
@@ -536,32 +537,22 @@
             isExporting = true;
             toast.info("正在打包下载...");
             const token = localStorage.getItem("auth_token");
-            const res = await fetch(`${API_BASE}/api/images/batch/export`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({ ids: Array.from(selectedImageIds) }),
+
+            // 使用 downloadFile 处理流式下载 (POST)
+            await downloadFile({
+                filename: `images_export_${new Date().getTime()}.zip`,
+                url: `${API_BASE}/api/images/batch/export`,
+                type: 'application/zip',
+                fetchOptions: {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ ids: Array.from(selectedImageIds) }),
+                }
             });
-            if (res.ok) {
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `images_export_${new Date().getTime()}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                toast.success("导出成功", {
-                    description: "文件已保存到浏览器默认下载位置",
-                    duration: 4000,
-                });
-            } else {
-                const err = await res.json();
-                toast.error(`导出失败: ${err.error}`);
-            }
+
         } catch (e) {
             console.error(e);
             toast.error("网络错误");
@@ -603,20 +594,39 @@
     async function handleExport(id: string) {
         try {
             const token = localStorage.getItem("auth_token");
+            
+            // 为了获取正确的文件名，我们这里还是先 fetch 一次HEAD 或者直接让 downloadFile 处理
+            // 但是 downloadFile 目前只支持简单的 URL 下载，如果需要文件名解析逻辑（Content-Disposition）
+            // 在 Tauri 环境下，save dialog 会让用户自己选文件名，defaultPath 很重要。
+            // 在 Web 环境下，浏览器自己会处理 Content-Disposition。
+            
+            // 策略：
+            // 1. 先构建一个大致的文件名作为 defaultPath (用于 Tauri Save Dialog)
+            const img = images.find(i => i.id === id);
+            let filename = img ? `${img.title}.png` : "image.png"; // 默认猜一个
+
+            // 修正策略：对于单图导出，为了精确文件名，先 fetch blob。
+            
+            // 注意：downloadFile 在 Tauri 下如果是 URL 下载，会先 save dialog，然后 fetch arrayBuffer write。
+            // 这样的好处是保存位置由用户定。
+            // 缺点是如果服务器返回的文件名和我们猜的不一样（比如扩展名），Tauri save dialog 已经定死了扩展名。
+            // 不过图库里的图片通常我们知道格式？或者我们可以先 HEAD 请求拿一下 Content-Disposition？
+            // 鉴于图库列表里没有扩展名信息，最好是 HEAD 一下。
+            // 但为了性能，暂且相信用户命名的扩展名，或者默认 png/jpg。
+            // 如果后端严格返回 content-type，我们可以更智能，但 downloadFile 内部目前比较简单。
+            // 现有逻辑是有复杂的 filename* 解析的。
+            // 为了保留这个解析能力，我们可以手动 fetch blob，然后传给 downloadFile 的 content。
+            // 这样既能拿到文件名，又能复用 downloadFile 的保存逻辑（Tauri下）或 Web 下载逻辑。
+            
+            // 修正策略：对于单图导出，为了精确文件名，先 fetch blob。
             const res = await fetch(`${API_BASE}/api/images/${id}/export`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (!res.ok) throw new Error("导出失败");
             
             const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
             
-            // 优先使用本地缓存的标题 (避免 WebView/Windows Header 解析问题)
-            const img = images.find(i => i.id === id);
-            let filename = img ? `${img.title}.png` : "image.png";
-
+            // 解析文件名
             const contentDisposition = res.headers.get("content-disposition");
             if (contentDisposition) {
                 const utf8Match = contentDisposition.match(/filename\*=UTF-8''(.+)/);
@@ -630,28 +640,24 @@
                 }
             }
             
-            // 如果 Header 没解析出带扩展名的文件名，且本地有标题，确保扩展名正确
+            // 确保扩展名
             if (img && !filename.includes('.')) {
-                // Determine extension from content-type or default to png
                 const contentType = res.headers.get("content-type") || "";
                 let ext = "png";
                 if (contentType.includes("jpeg")) ext = "jpg";
                 else if (contentType.includes("webp")) ext = "webp";
                 else if (contentType.includes("gif")) ext = "gif";
-                
                 filename = `${img.title}.${ext}`;
             }
-            a.download = filename;
-            
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            toast.success("导出成功", {
-                description: "文件已保存到浏览器下载文件夹",
-                duration: 3000,
+
+            // 调用 downloadFile (传 Blob)
+            await downloadFile({
+                filename,
+                content: blob
             });
+
         } catch (e) {
+            console.error(e);
             toast.error("导出失败");
         }
     }
@@ -1537,7 +1543,7 @@
                     <div class="flex gap-2 pt-4">
                         <Button onclick={saveImageChanges}>保存</Button>
                         <Button variant="outline" onclick={() => editDialogOpen = false}>取消</Button>
-                        <Button variant="outline" onclick={() => handleExport(editingImage!.id)}>
+                        <Button variant="outline" onclick={(e) => { e.stopPropagation(); handleExport(editingImage!.id); }}>
                             <Download class="h-4 w-4 mr-1" />
                             导出原图
                         </Button>

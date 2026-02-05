@@ -40,6 +40,8 @@ pub struct Model {
     pub token_count_other: Option<i32>,
     // 来源标记：import（导入）| local（本地新建）
     pub source: String,
+    // 封面版本号，用于浏览器缓存控制
+    pub avatar_version: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -10,6 +10,7 @@
     import { toast } from "svelte-sonner";
     import { cn } from "$lib/utils";
     import { convertJsonlToTxt, scanTags } from "$lib/utils/exportUtils";
+    import { downloadFile } from "$lib/utils/download";
     import { ScrollArea } from "$lib/components/ui/scroll-area";
     import { dndzone, type DndEvent } from "svelte-dnd-action";
     import { flip } from "svelte/animate";
@@ -266,20 +267,16 @@
         updateRegexToBackend(regexScripts);
     }
     
-    function handleExportRegex() {
+    async function handleExportRegex() {
         if (regexScripts.length === 0) return;
         const jsonStr = JSON.stringify(regexScripts, null, 2);
-        const blob = new Blob([jsonStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        // Filename: [CharacterName]_regex_group.json
         const safeName = (characterName || "character").replace(/[\\/:*?"<>|]/g, "_");
-        a.download = `${safeName}_regex_group.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        
+        await downloadFile({
+            filename: `${safeName}_regex_group.json`,
+            content: jsonStr,
+            type: "application/json"
+        });
     }
 
     async function handleSave() {

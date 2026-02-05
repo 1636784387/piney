@@ -27,15 +27,19 @@
     let { 
         script = $bindable(),
         onDelete,
-        isOpen = $bindable(),
+        isOpen = false,
+        onToggle = () => {},
         isDirty = false, 
         lastSaved = 0
     } = $props<{
         script: any,
         onDelete: () => void,
         isOpen?: boolean,
+        onToggle?: () => void,
         isDirty?: boolean,
-        lastSaved?: number
+        lastSaved?: number,
+        onDragStart?: () => void,
+        onDragEnd?: () => void
     }>();
 
     let isAdvanced = $state(false);
@@ -189,6 +193,69 @@
         // 3. Render Markdown/HTML result
         return renderContent(processed, []);
     }
+
+    // 触屏/指针点击检测：区分短按（展开）和长按（拖拽）
+    let pointerStartTime = 0;
+    let pointerStartX = 0;
+    let pointerStartY = 0;
+    let isLongPress = false;
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    const TAP_THRESHOLD_MS = 500; // 小于 500ms 视为点击（增加容差）
+    const LONG_PRESS_MS = 400; // 400ms 后视为长按
+    const MOVE_TOLERANCE = 15; // 允许 15px 范围内的移动
+
+    function handlePointerDown(e: PointerEvent) {
+        pointerStartTime = Date.now();
+        pointerStartX = e.clientX;
+        pointerStartY = e.clientY;
+        isLongPress = false;
+        
+        // 设置长按计时器
+        longPressTimer = setTimeout(() => {
+            isLongPress = true;
+        }, LONG_PRESS_MS);
+    }
+
+    function handlePointerMove(e: PointerEvent) {
+        // 计算移动距离
+        const dx = Math.abs(e.clientX - pointerStartX);
+        const dy = Math.abs(e.clientY - pointerStartY);
+        
+        // 超过容差范围才取消长按
+        if (dx > MOVE_TOLERANCE || dy > MOVE_TOLERANCE) {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        }
+    }
+
+    function handlePointerUp(e: PointerEvent) {
+        // 清除计时器
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+        
+        const duration = Date.now() - pointerStartTime;
+        const dx = Math.abs(e.clientX - pointerStartX);
+        const dy = Math.abs(e.clientY - pointerStartY);
+        const movedTooMuch = dx > MOVE_TOLERANCE || dy > MOVE_TOLERANCE;
+        
+        // 短按且未超出移动容差且不是长按 = 点击
+        if (duration < TAP_THRESHOLD_MS && !movedTooMuch && !isLongPress) {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggle();
+        }
+    }
+
+    function handlePointerCancel() {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    }
 </script>
 
 <div class={cn(
@@ -200,38 +267,37 @@
     {#if isAnyDirty}
         <span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm z-20 animate-pulse border border-background"></span>
     {/if}
-    <!-- Header -->
     <div 
         class={cn(
-            "sticky top-0 z-10 flex items-center gap-3 p-3 cursor-pointer select-none transition-colors",
+            "sticky top-0 z-10 flex items-center gap-3 p-3 transition-colors cursor-pointer",
             isOpen ? "bg-primary/5 rounded-t-xl" : "bg-transparent group-hover:!bg-accent/40 rounded-xl"
         )}
         role="button"
         tabindex="0"
+        onpointerdown={handlePointerDown}
+        onpointermove={handlePointerMove}
+        onpointerup={handlePointerUp}
+        onpointercancel={handlePointerCancel}
         onkeydown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-                e.stopPropagation();
-                isOpen = !isOpen;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onToggle();
             }
-        }}
-        onclick={(e) => {
-            e.stopPropagation();
-            isOpen = !isOpen;
         }}
     >
         <!-- Drag Handle (Visual only here, actual drag logic in parent) -->
-        <div class="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
+        <div class="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0">
             <GripVertical class="h-4 w-4" />
         </div>
 
         <!-- Enable Switch (Left) -->
         <div 
-            class="flex items-center gap-2" 
+            class="flex items-center gap-2 shrink-0" 
             role="none" 
-            onkeydown={(e) => e.stopPropagation()} 
             onclick={(e) => e.stopPropagation()}
-            onmousedown={(e) => e.stopPropagation()}
             ontouchstart={(e) => e.stopPropagation()}
+            onmousedown={(e) => e.stopPropagation()}
+            onpointerdown={(e) => e.stopPropagation()}
         >
              <Switch 
                 checked={!localDisabled} 
@@ -240,14 +306,9 @@
             />
         </div>
 
-        <!-- Collapsible Toggle Content -->
-        <div 
-            class="flex items-center gap-2 flex-1 text-left min-w-0"
-            onmousedown={(e) => e.stopPropagation()}
-            ontouchstart={(e) => e.stopPropagation()}
-            role="none"
-        >
-            <div class={cn("transition-transform duration-200", isOpen && "rotate-180")}>
+        <!-- Title and Indicators -->
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+            <div class={cn("transition-transform duration-200 shrink-0", isOpen && "rotate-180")}>
                 <ChevronDown class="h-4 w-4 text-muted-foreground" />
             </div>
             
@@ -263,13 +324,18 @@
         </div>
 
         <!-- Quick Actions -->
-        <div class="flex items-center gap-2">
+        <div 
+            class="flex items-center gap-2"
+            role="none"
+            onclick={(e) => e.stopPropagation()}
+            ontouchstart={(e) => e.stopPropagation()}
+            onmousedown={(e) => e.stopPropagation()}
+            onpointerdown={(e) => e.stopPropagation()}
+        >
              <!-- Mode Switch (Segmented) -->
              <div 
                 class="flex items-center bg-secondary/50 rounded-lg p-0.5 border border-border/50 h-7 mr-2"
                 role="none"
-                onkeydown={(e) => e.stopPropagation()}
-                onclick={(e) => e.stopPropagation()}
              >
                  <button 
                     class={cn("px-2 text-[10px] rounded-md transition-all h-full flex items-center", !isAdvanced ? "bg-background shadow-sm text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}

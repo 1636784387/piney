@@ -24,6 +24,40 @@ use crate::entities::character_card;
 use crate::utils::hash::compute_json_hash;
 use crate::utils::token::calculate_card_tokens;
 
+#[derive(Serialize)]
+pub struct CardLightItem {
+    pub id: Uuid,
+    pub name: String,
+    pub author: Option<String>,
+    pub avatar: Option<String>,
+    pub avatar_version: i32,
+    pub category_id: Option<Uuid>,
+    pub tags: Vec<String>,
+    pub rating: f64,
+    pub cover_blur: bool,
+    pub version: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, FromQueryResult)]
+struct CardLightRow {
+    pub id: Uuid,
+    pub name: String,
+    pub author: Option<String>,
+    pub avatar: Option<String>,
+    pub avatar_version: i32,
+    pub category_id: Option<Uuid>,
+    pub tags: String,
+    pub rating: f64,
+    pub cover_blur: bool,
+    pub version: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+    pub deleted_at: Option<chrono::NaiveDateTime>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ImportResult {
     file_name: String,
@@ -383,6 +417,7 @@ async fn save_card_model(
         token_count_wb: Set(Some(counts.wb)),
         token_count_other: Set(Some(counts.other)),
         source: Set(source.to_string()),
+        avatar_version: Set(1),
     };
 
     active_model
@@ -929,6 +964,132 @@ pub async fn list(
     }))
 }
 
+/// 分页查询参数
+#[derive(Deserialize)]
+pub struct ListAllQuery {
+    pub page: Option<u64>,
+    pub page_size: Option<u64>,
+    pub search: Option<String>,
+    pub category_id: Option<String>,
+    pub sort: Option<String>,
+    pub order: Option<String>,
+}
+
+/// 分页响应
+#[derive(Serialize)]
+pub struct PaginatedLightResponse {
+    pub items: Vec<CardLightItem>,
+    pub total: u64,
+    pub page: u64,
+    pub page_size: u64,
+    pub total_pages: u64,
+}
+
+/// GET /api/cards/all - 获取角色卡列表（服务端分页）
+pub async fn list_all(
+    State(db): State<DatabaseConnection>,
+    Query(query): Query<ListAllQuery>,
+) -> Result<Json<PaginatedLightResponse>, (StatusCode, String)> {
+    let page = query.page.unwrap_or(1).max(1);
+    let page_size = query.page_size.unwrap_or(20).min(100);
+    let sort_field = query.sort.as_deref().unwrap_or("updated_at");
+    let sort_order = query.order.as_deref().unwrap_or("desc");
+
+    // 构建基础查询
+    let mut base_query = character_card::Entity::find()
+        .filter(character_card::Column::DeletedAt.is_null());
+
+    // 搜索过滤
+    if let Some(ref search) = query.search {
+        if !search.is_empty() {
+            let search_pattern = format!("%{}%", search.to_lowercase());
+            base_query = base_query.filter(
+                sea_orm::Condition::any()
+                    .add(character_card::Column::Name.like(&search_pattern))
+                    .add(character_card::Column::Tags.like(&search_pattern))
+            );
+        }
+    }
+
+    // 分类过滤
+    if let Some(ref cat_id) = query.category_id {
+        if cat_id == "null" || cat_id.is_empty() {
+            base_query = base_query.filter(character_card::Column::CategoryId.is_null());
+        } else if let Ok(uuid) = Uuid::parse_str(cat_id) {
+            base_query = base_query.filter(character_card::Column::CategoryId.eq(uuid));
+        }
+    }
+
+    // 获取总数
+    let total = base_query.clone().count(&db).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 排序
+    let order = if sort_order == "asc" { sea_orm::Order::Asc } else { sea_orm::Order::Desc };
+    let sorted_query = match sort_field {
+        "name" => base_query.order_by(character_card::Column::Name, order),
+        "created_at" => base_query.order_by(character_card::Column::CreatedAt, order),
+        _ => base_query.order_by(character_card::Column::UpdatedAt, order),
+    };
+
+    // 分页查询
+    let rows = sorted_query
+        .select_only()
+        .columns([
+            character_card::Column::Id,
+            character_card::Column::Name,
+            character_card::Column::Author,
+            character_card::Column::Avatar,
+            character_card::Column::AvatarVersion,
+            character_card::Column::CategoryId,
+            character_card::Column::Tags,
+            character_card::Column::Rating,
+            character_card::Column::CoverBlur,
+            character_card::Column::Version,
+            character_card::Column::CreatedAt,
+            character_card::Column::UpdatedAt,
+            character_card::Column::DeletedAt,
+        ])
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .into_model::<CardLightRow>()
+        .all(&db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let items: Vec<CardLightItem> = rows
+        .into_iter()
+        .map(|c| {
+            let tags: Vec<String> = serde_json::from_str(&c.tags).unwrap_or_default();
+            CardLightItem {
+                id: c.id,
+                name: c.name,
+                author: c.author,
+                avatar: c.avatar,
+                avatar_version: c.avatar_version,
+                category_id: c.category_id,
+                tags,
+                rating: c.rating,
+                cover_blur: c.cover_blur,
+                version: c.version,
+                created_at: chrono::Utc.from_utc_datetime(&c.created_at),
+                updated_at: chrono::Utc.from_utc_datetime(&c.updated_at),
+                deleted_at: c.deleted_at.map(|d| chrono::Utc.from_utc_datetime(&d)),
+            }
+        })
+        .collect();
+
+    let total_pages = (total as f64 / page_size as f64).ceil() as u64;
+
+    Ok(Json(PaginatedLightResponse {
+        items,
+        total,
+        page,
+        page_size,
+        total_pages,
+    }))
+}
+
 /// GET /api/cards/:id - 获取角色卡详情
 pub async fn get_details(
     State(db): State<DatabaseConnection>,
@@ -1332,10 +1493,13 @@ pub async fn update_cover(
         let avatar_path = format!("/cards/{}/v1_thumbnail.webp", id);
 
         // Update DB
+        let current_version = card.avatar_version;
         let mut active: character_card::ActiveModel = card.into();
         active.avatar = Set(Some(avatar_path));
         // Mark as modified since source image changed (and likely needs new metadata injected on export)
         active.metadata_modified = Set(true);
+        // 增加封面版本号，用于浏览器缓存控制
+        active.avatar_version = Set(current_version + 1);
         active.updated_at = Set(chrono::Utc::now().naive_utc());
 
         active
@@ -1825,5 +1989,42 @@ pub async fn clear_trash(
     invalidate_cache();
     Ok(Json(ClearTrashResponse {
         deleted_count: count,
+    }))
+}
+
+/// 标签统计响应
+#[derive(Serialize)]
+pub struct TagStatsResponse {
+    pub tags: std::collections::HashMap<String, u32>,
+    pub total_cards: u64,
+}
+
+/// GET /api/cards/stats/tags - 获取标签统计
+pub async fn tag_stats(
+    State(db): State<DatabaseConnection>,
+) -> Result<Json<TagStatsResponse>, (StatusCode, String)> {
+    // 获取所有未删除卡片的标签
+    let rows: Vec<(String,)> = character_card::Entity::find()
+        .select_only()
+        .column(character_card::Column::Tags)
+        .filter(character_card::Column::DeletedAt.is_null())
+        .into_tuple()
+        .all(&db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 统计标签
+    let mut tag_counts: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    for (tags_json,) in &rows {
+        if let Ok(tags) = serde_json::from_str::<Vec<String>>(tags_json) {
+            for tag in tags {
+                *tag_counts.entry(tag).or_insert(0) += 1;
+            }
+        }
+    }
+
+    Ok(Json(TagStatsResponse {
+        tags: tag_counts,
+        total_cards: rows.len() as u64,
     }))
 }

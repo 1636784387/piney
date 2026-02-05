@@ -551,7 +551,7 @@
                                         {/if}
                                     </SelectValue>
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent class="max-h-[40vh] overflow-y-auto">
                                     <SelectItem value="" label="未配置">未配置</SelectItem>
                                     {#each channels as c}
                                         <SelectItem

@@ -57,6 +57,7 @@
     import DoctorDialog from "$lib/components/character/DoctorDialog.svelte";
     import { doctorTasks } from "$lib/ai/doctor";
     import { AiFeature } from "$lib/ai/types";
+    import { downloadFile } from "$lib/utils/download";
 
     import { API_BASE, resolveUrl } from "$lib/api";
     import { cardCache, listNeedsRefresh } from "$lib/stores/cardCache";
@@ -765,20 +766,17 @@
             if (!res.ok) throw new Error("导出失败");
             
             const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
             
             // Determine extension based on content-type
             const contentType = res.headers.get("content-type") || "";
             const ext = contentType.includes("application/json") ? "json" : "png";
             
-            a.download = `${card.name || "character"}.${ext}`; 
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            toast.success("导出成功 (请查看浏览器默认下载文件夹)");
+            await downloadFile({
+                filename: `${card.name || "character"}.${ext}`,
+                content: blob
+            });
+            
+            // toast.success("导出成功");
         } catch (e) {
             toast.error("导出失败");
             console.error(e);

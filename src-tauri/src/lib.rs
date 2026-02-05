@@ -5,6 +5,8 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|_app| {
             // 0. 全局 Panic 捕获 (调试用)
@@ -18,7 +20,6 @@ pub fn run() {
 
             if let Ok(current_dir) = std::env::current_dir() {
                 println!("Tauri 启动 CWD: {:?}", current_dir);
-                let _ = std::fs::write("cwd_debug.txt", format!("CWD: {:?}\n", current_dir));
             }
 
             // 移动端：使用系统分配的 App Data 目录（只有这里有读写权限）

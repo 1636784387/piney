@@ -36,12 +36,15 @@
     let searchTerm = $state("");
     let openScripts: Record<string, boolean> = $state({});
     const FLIP_DURATION_MS = 200;
-    const TOUCH_DELAY_MS = 300; // 长按300ms后才能拖拽（移动端防误触）
+    const TOUCH_DELAY_MS = 400; // 长按 400ms 后才能拖拽
     let fileInput: HTMLInputElement;
 
-    // 拖拽专用状态（防止拖拽过程中触发脏状态）
+    // 拖拽专用状态
     let dndItems: any[] = $state([]);
     let isDragging = $state(false);
+    
+    // Explicit Drag Handle Control
+    let isDragEnabled = $state(false);
 
     // 当任意条目展开时禁用拖拽
     let isDragDisabled = $derived(Object.values(openScripts).some(v => v));
@@ -238,17 +241,26 @@
     let orderBeforeDrag: string[] = [];
 
     function handleDndConsider(e: CustomEvent<{ items: any[], info: { trigger: string } }>) {
-        // 开始拖拽时记录原始顺序并初始化拖拽状态
+        // 只有在拖拽真正开始时才更新 dndItems，避免轻触导致的闪烁
         if (e.detail.info.trigger === TRIGGERS.DRAG_STARTED) {
             orderBeforeDrag = scripts.map((s: any) => s.id);
             isDragging = true;
+            dndItems = e.detail.items;
+        } else if (isDragging) {
+            // 拖拽过程中持续更新
+            dndItems = e.detail.items;
         }
-        // 只更新拖拽专用状态，不触发脏检查
-        dndItems = e.detail.items;
+        // 非拖拽状态下不更新 dndItems，避免触发重新渲染
     }
 
     function handleDndFinalize(e: CustomEvent<{ items: any[], info: { trigger: string } }>) {
+        // 如果当前不在拖拽状态，忽略 finalize 事件
+        if (!isDragging) {
+            return;
+        }
+        
         isDragging = false;
+        isDragEnabled = false; // Safety reset
         
         // 只有顺序真正改变时才更新数据并触发 onChange
         const newOrder = e.detail.items.map((s: any) => s.id);
@@ -325,7 +337,8 @@
                         <!-- svelte-ignore binding_property_non_reactive -->
                         <RegexItem 
                             bind:script={data.extensions.regex_scripts[realIndex]} 
-                            bind:isOpen={openScripts[script.id]}
+                            isOpen={openScripts[script.id] ?? false}
+                            onToggle={() => openScripts[script.id] = !openScripts[script.id]}
                             isDirty={dirtyScriptIds.has(script.id)}
                             {lastSaved}
                             onDelete={() => deleteScript(script.id)}
@@ -361,10 +374,13 @@
                                 <!-- svelte-ignore binding_property_non_reactive -->
                                 <RegexItem 
                                     bind:script={data.extensions.regex_scripts[realIndex]} 
-                                    bind:isOpen={openScripts[script.id]}
+                                    isOpen={openScripts[script.id] ?? false}
+                                    onToggle={() => openScripts[script.id] = !openScripts[script.id]}
                                     isDirty={dirtyScriptIds.has(script.id)}
                                     {lastSaved}
                                     onDelete={() => deleteScript(script.id)}
+                                    onDragStart={() => isDragEnabled = true}
+                                    onDragEnd={() => isDragEnabled = false}
                                 />
                             {/if}
                         </div>
