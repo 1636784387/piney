@@ -101,7 +101,6 @@ pub fn run() {
                 }
             };
 
-            let log_clone = log.clone();
             log("Tauri setup completed. Spawning backend thread...");
 
             // 启动后端服务（在单独的线程中）

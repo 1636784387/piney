@@ -15,6 +15,11 @@ val tauriProperties = Properties().apply {
     if (localPropFile.exists()) {
         localPropFile.inputStream().use { load(it) }
     }
+    // 从项目根目录读取签名配置 (不会被 clean/重新生成覆盖)
+    val signingPropFile = file("../../../../../android-signing.properties")
+    if (signingPropFile.exists()) {
+        signingPropFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -57,13 +62,23 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("release")
+            val keystoreFile = tauriProperties.getProperty("key.store")
+            if (keystoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                // 没有配置签名密钥时，使用 debug 签名 (允许测试安装)
+                signingConfig = signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
                     .toList().toTypedArray()
             )
         }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
         jvmTarget = "17"
