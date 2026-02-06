@@ -6,6 +6,7 @@
     import type { ComponentProps } from "svelte";
     import { auth } from "$lib/stores/auth.svelte";
     import { API_BASE } from "$lib/api";
+    import { goto } from "$app/navigation";
 
     let { ...restProps }: ComponentProps<typeof Card.Root> = $props();
 
@@ -14,6 +15,26 @@
     let confirmPassword = $state("");
     let loading = $state(false);
     let error = $state("");
+
+    // 隐藏调试入口：点击标题5次打开调试页面
+    let clickCount = $state(0);
+    let clickTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    function handleTitleClick() {
+        clickCount++;
+        
+        // 2秒内没有继续点击则重置
+        if (clickTimeout) clearTimeout(clickTimeout);
+        clickTimeout = setTimeout(() => {
+            clickCount = 0;
+        }, 2000);
+
+        // 点击5次打开调试页面
+        if (clickCount >= 5) {
+            clickCount = 0;
+            goto("/debug");
+        }
+    }
 
     async function handleSubmit(e: Event) {
         e.preventDefault();
@@ -55,7 +76,10 @@
 
 <Card.Root {...restProps}>
     <Card.Header>
-        <Card.Title>创建您的管理员账户</Card.Title>
+        <Card.Title 
+            class="cursor-pointer select-none" 
+            onclick={handleTitleClick}
+        >创建您的管理员账户</Card.Title>
         <Card.Description
             >创建完成后您将通过此账号和密码登录 Piney</Card.Description
         >

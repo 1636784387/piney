@@ -84,12 +84,24 @@ pub fn run() {
             }
 
             let data_dir_str = std::env::var("DATA_DIR").unwrap_or_else(|_| "./data".to_string());
-            let log_path_clone = std::path::PathBuf::from(data_dir_str).join("startup.log");
+            let log_path_clone = std::path::PathBuf::from(&data_dir_str).join("startup.log");
+
+            // 每次启动清空日志，只保留当次启动的记录
+            // 使用 AtomicBool 确保只在首次写入时清空
+            use std::sync::atomic::{AtomicBool, Ordering};
+            static FIRST_LOG: AtomicBool = AtomicBool::new(true);
+
             let log = move |msg: &str| {
                 use std::io::Write;
+
+                // 首次写入时清空文件，后续追加
+                let is_first = FIRST_LOG.swap(false, Ordering::SeqCst);
+
                 if let Ok(mut file) = std::fs::OpenOptions::new()
                     .create(true)
-                    .append(true)
+                    .write(true)
+                    .truncate(is_first) // 首次清空，后续不清空
+                    .append(!is_first) // 首次不追加，后续追加
                     .open(&log_path_clone)
                 {
                     let _ = writeln!(
@@ -101,13 +113,21 @@ pub fn run() {
                 }
             };
 
+            log("====================================================");
+            log(&format!("Piney App v{} 启动", env!("CARGO_PKG_VERSION")));
+            log(&format!("Platform: {}", std::env::consts::OS));
+            log(&format!("Arch: {}", std::env::consts::ARCH));
+            log(&format!(
+                "DATA_DIR: {}",
+                std::env::var("DATA_DIR").unwrap_or_else(|_| "未设置".to_string())
+            ));
+            log("====================================================");
             log("Tauri setup completed. Spawning backend thread...");
 
             // 启动后端服务（在单独的线程中）
             // 使用 AtomicBool 追踪后端状态：
             // - swap(true) 防止 Activity 重建导致重复启动 (和 OnceLock 效果一样)
             // - 崩溃后 store(false) 允许下次重启 (OnceLock 做不到)
-            use std::sync::atomic::{AtomicBool, Ordering};
             static BACKEND_RUNNING: AtomicBool = AtomicBool::new(false);
 
             // swap(true) 返回旧值：如果是 false，说明后端没在运行，我们启动它
@@ -131,7 +151,7 @@ pub fn run() {
                     });
                 });
             } else {
-                log("Backend already running. Skipping spawn.");
+                log("[SKIP] Backend already running (Activity 重建检测). Skipping spawn.");
             }
 
             Ok(())
@@ -176,6 +196,11 @@ where
     log(&format!("Loading config from: {:?}", config_path));
 
     let config = piney::config::ConfigState::new(&config_path.to_string_lossy());
+    if config.is_initialized() {
+        log("Config loaded: 已初始化 (用户已注册)");
+    } else {
+        log("Config loaded: 未初始化 (需要注册)");
+    }
 
     // 4. 创建 Axum 应用
     log("Creating Axum app...");
@@ -187,13 +212,23 @@ where
 
     log(&format!("Binding to address: {}", addr));
 
+    let mut port_retries = 0;
     let listener = loop {
         match tokio::net::TcpListener::bind(addr).await {
-            Ok(l) => break l,
+            Ok(l) => {
+                if port_retries > 0 {
+                    log(&format!(
+                        "Port {} bound successfully after {} retries",
+                        port, port_retries
+                    ));
+                }
+                break l;
+            }
             Err(e) => {
+                port_retries += 1;
                 log(&format!(
-                    "Failed to bind port {}: {}, retrying in 1s...",
-                    port, e
+                    "[RETRY {}] Failed to bind port {}: {}, retrying in 1s...",
+                    port_retries, port, e
                 ));
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
