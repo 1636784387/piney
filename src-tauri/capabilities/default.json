@@ -7,9 +7,105 @@
     "permissions": [
         "core:default",
         "shell:allow-open",
-        "fs:default",
-        "fs:allow-write-file",
-        "fs:allow-write-text-file",
-        "dialog:default"
+        "dialog:default",
+        {
+            "identifier": "fs:default"
+        },
+        {
+            "identifier": "fs:allow-read-text-file",
+            "allow": [
+                {
+                    "path": "$APPDATA/**"
+                },
+                {
+                    "path": "$DOWNLOAD/**"
+                },
+                {
+                    "path": "$DOCUMENT/**"
+                },
+                {
+                    "path": "$PICTURE/**"
+                },
+                {
+                    "path": "$HOME/**"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-write-text-file",
+            "allow": [
+                {
+                    "path": "$APPDATA/**"
+                },
+                {
+                    "path": "$DOWNLOAD/**"
+                },
+                {
+                    "path": "$DOCUMENT/**"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-read-file",
+            "allow": [
+                {
+                    "path": "$APPDATA/**"
+                },
+                {
+                    "path": "$DOWNLOAD/**"
+                },
+                {
+                    "path": "$DOCUMENT/**"
+                },
+                {
+                    "path": "$PICTURE/**"
+                },
+                {
+                    "path": "$HOME/**"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-write-file",
+            "allow": [
+                {
+                    "path": "$APPDATA/**"
+                },
+                {
+                    "path": "$DOWNLOAD/**"
+                },
+                {
+                    "path": "$DOCUMENT/**"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-mkdir",
+            "allow": [
+                {
+                    "path": "$APPDATA/**"
+                },
+                {
+                    "path": "$DOWNLOAD/**"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-exists",
+            "allow": [
+                {
+                    "path": "$APPDATA/**"
+                },
+                {
+                    "path": "$DOWNLOAD/**"
+                },
+                {
+                    "path": "$DOCUMENT/**"
+                },
+                {
+                    "path": "$PICTURE/**"
+                }
+            ]
+        }
     ]
 }
