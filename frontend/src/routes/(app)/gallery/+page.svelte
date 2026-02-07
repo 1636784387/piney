@@ -35,6 +35,7 @@
     import { flip } from "svelte/animate";
     import { longpress } from "$lib/actions/longpress";
     import { downloadFile } from "$lib/utils/download";
+    import { galleryUpload } from "$lib/stores/galleryUpload";
 
     // ============ 类型定义 ============
     interface Category {
@@ -664,37 +665,24 @@
 
     // ============ 导入 ============
     let fileInput: HTMLInputElement;
+    
+    // 上传状态 (使用 Store 以便切换页面后保持进度)
+    let isUploading = $derived($galleryUpload.isUploading);
+    let isUploadComplete = $derived($galleryUpload.isComplete);
+    let uploadProgress = $derived($galleryUpload.progress);
+
     async function handleImport(event: Event) {
         const input = event.target as HTMLInputElement;
         const files = input.files;
         if (!files || files.length === 0) return;
 
-        const formData = new FormData();
-        for (const file of files) {
-            formData.append("files", file);
-        }
-
-        try {
-            toast.info(`正在导入 ${files.length} 张图片...`);
-            const token = localStorage.getItem("auth_token");
-            const res = await fetch(`${API_BASE}/api/images`, {
-                method: "POST",
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-                body: formData,
-            });
-            if (res.ok) {
-                const data = await res.json();
-                toast.success(`成功导入 ${data.imported} 张图片`);
-                imageCache.clear();
-                currentPage = 1;
-                await fetchImages();
-            } else {
-                const error = await res.json();
-                toast.error(error.error || "导入失败");
-            }
-        } catch (e) {
-            toast.error("导入失败");
-        }
+        galleryUpload.startUpload(files, async () => {
+             // 刷新列表
+            imageCache.clear();
+            currentPage = 1;
+            await fetchImages();
+        });
+        
         input.value = "";
     }
 
@@ -842,10 +830,19 @@
                 class="hidden"
                 bind:this={fileInput}
                 onchange={handleImport}
+                disabled={isUploading}
             />
-            <Button class="gap-2" onclick={() => fileInput.click()}>
-                <Upload class="h-4 w-4" />
-                导入图片
+            <Button class="gap-2" onclick={() => fileInput.click()} disabled={isUploading}>
+                {#if isUploading}
+                    <div class="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
+                    导入中 ({uploadProgress.current}/{uploadProgress.total})
+                {:else if isUploadComplete}
+                    <Check class="h-4 w-4" />
+                    导入完成 ({uploadProgress.success}/{uploadProgress.total})
+                {:else}
+                    <Upload class="h-4 w-4" />
+                    导入图片
+                {/if}
             </Button>
         </div>
     </div>

@@ -107,7 +107,10 @@ export async function apiCall<T = unknown>(
                 localStorage.removeItem('auth_token');
             }
             if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-                window.location.href = '/login';
+                // 如果正在重启服务（恢复备份时），则不跳转登录页，防止打断重启流程
+                if (localStorage.getItem('is_restarting') !== 'true') {
+                    window.location.href = '/login';
+                }
             }
             return {
                 success: false,

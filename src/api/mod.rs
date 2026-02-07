@@ -13,24 +13,36 @@ pub mod image_categories;
 pub mod images;
 pub mod quick_reply;
 pub mod settings;
+pub mod system;
 pub mod theater;
 pub mod upload;
 pub mod versions;
 pub mod world_info;
 
 use axum::{
+    extract::DefaultBodyLimit,
     routing::{delete, get, patch, post, put},
     Router,
 };
 use sea_orm::DatabaseConnection;
 
-pub fn routes(db: DatabaseConnection) -> Router {
+use crate::config::ConfigState;
+use backup::BackupState;
+
+pub fn routes(db: DatabaseConnection, config: ConfigState) -> Router {
     use tower_http::compression::CompressionLayer;
+
+    // 备份恢复需要的组合状态
+    let backup_state = BackupState {
+        db: db.clone(),
+        config: config.clone(),
+    };
 
     // 1. 需要压缩的路由（大部分 JSON API）
     let compressed_routes = Router::new()
         // 设置
         .route("/settings", patch(settings::update))
+        .route("/system/restart", post(system::restart))
         // 仪表盘
         .route("/dashboard", get(dashboard::get_dashboard_stats))
         .route("/gacha/draw", post(dashboard::start_gacha))
@@ -162,8 +174,6 @@ pub fn routes(db: DatabaseConnection) -> Router {
             "/ai/doctor/history/item/{id}",
             delete(ai::doctor_history_delete),
         )
-        // 备份导入 (POST) 可以压缩响应? 一般 response 只是 text msg，压不压无所谓
-        .route("/backup/import", post(backup::import_backup))
         // 小剧场
         .route(
             "/theaters",
@@ -196,6 +206,16 @@ pub fn routes(db: DatabaseConnection) -> Router {
     // 2. 不需要压缩的路由 (流式传输)
     let streaming_routes = Router::new().route("/backup/export", get(backup::export_backup));
 
-    // 3. 合并路由
-    compressed_routes.merge(streaming_routes).with_state(db)
+    // 3. 备份导入路由 (使用 BackupState，包含 config)
+    // 禁用默认 body 大小限制，允许上传任意大小的备份文件
+    let backup_import_route = Router::new()
+        .route("/backup/import", post(backup::import_backup))
+        .layer(DefaultBodyLimit::disable())
+        .with_state(backup_state);
+
+    // 4. 合并路由
+    compressed_routes
+        .merge(streaming_routes)
+        .with_state(db)
+        .merge(backup_import_route)
 }

@@ -27,3 +27,6 @@ migration = { path = "../migration" }
 chrono = "0.4"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+reqwest = { version = "0.12", features = ["stream", "rustls-tls"] }
+futures-util = "0.3"

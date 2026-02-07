@@ -49,19 +49,9 @@ export async function downloadFile(options: DownloadOptions) {
                     await writeFile(filePath, content);
                 }
             } else if (url) {
-                // 处理流式下载
-                // 注意：这里需要确保 fetch 能拿到完整数据，如果文件极大可能需要 chunk 写入
-                // 但 fs writeFile 目前也是一次性写入。
-                // 如果需要真正的 stream pipe，在 Tauri 中比较复杂（需要 Rust Command 或者不断 append）
-                // 暂时使用 ArrayBuffer 方式，对于几百MB的文件通常手机也能扛得住。
-                // 如果后续有超大文件需求，再考虑 stream chunk append 方案。
-
-                const response = await fetch(url, fetchOptions);
-                if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-
-                // 简单的 buffer 读取
-                const buffer = await response.arrayBuffer();
-                await writeFile(filePath, new Uint8Array(buffer));
+                // 使用 Rust 后端下载，避免 WebView 内存限制 (OOM)
+                const { invoke } = await import('@tauri-apps/api/core');
+                await invoke('download_large_file', { url, filePath });
             }
 
             toast.dismiss(toastId);

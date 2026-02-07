@@ -426,7 +426,7 @@
     
     async function loadStyleLibrary() {
         try {
-            const res = await fetch('/api/frontend-styles', {
+            const res = await fetch(`${API_BASE}/api/frontend-styles`, {
                 headers: getAuthHeaders()
             });
             if (res.ok) {
@@ -439,7 +439,7 @@
     
     async function loadStyle(id: string) {
         try {
-            const res = await fetch(`/api/frontend-styles/${id}`, {
+            const res = await fetch(`${API_BASE}/api/frontend-styles/${id}`, {
                 headers: getAuthHeaders()
             });
             if (res.ok) {
@@ -478,13 +478,13 @@
             
             let res;
             if (currentStyleId) {
-                res = await fetch(`/api/frontend-styles/${currentStyleId}`, {
+                res = await fetch(`${API_BASE}/api/frontend-styles/${currentStyleId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                     body: JSON.stringify(payload),
                 });
             } else {
-                res = await fetch('/api/frontend-styles', {
+                res = await fetch(`${API_BASE}/api/frontend-styles`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                     body: JSON.stringify(payload),
@@ -508,7 +508,7 @@
     
     async function deleteStyle(id: string) {
         try {
-            const res = await fetch(`/api/frontend-styles/${id}`, { 
+            const res = await fetch(`${API_BASE}/api/frontend-styles/${id}`, { 
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });

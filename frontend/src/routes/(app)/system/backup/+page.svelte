@@ -16,10 +16,14 @@
     let fileInput: HTMLInputElement;
 
     import { downloadFile } from "$lib/utils/download";
+    import RestartOverlay from "$lib/components/RestartOverlay.svelte";
+    import { isTauri, invoke } from "@tauri-apps/api/core";
+    // import { relaunch } from "@tauri-apps/plugin-process"; // Soft restart now
 
     // --- 导出备份 ---
     let isExporting = false;
-    
+    let isRestarting = false;
+
     async function handleExport() {
         if (isExporting) return;
         isExporting = true;
@@ -32,8 +36,6 @@
                 return;
             }
 
-            // 使用统一下载工具
-            // 注意：这里我们让 downloadFile 自己处理 "已触发下载" 的提示
             await downloadFile({
                 filename: "piney_backup.piney",
                 url: `${API_BASE}/api/backup/export?token=${encodeURIComponent(token)}`,
@@ -48,7 +50,49 @@
         }
     }
 
-    // --- 恢复备份 ---
+    // --- 重启与轮询逻辑 ---
+    async function checkServerStatus() {
+        let successCount = 0;
+        const maxRetries = 60; // 60s timeout
+        
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                // 使用 fetch 而不是 axios/api 避免拦截器干扰
+                const res = await fetch(`${API_BASE}/api/health`);
+                if (res.ok) {
+                    successCount++;
+                    // 连续 2 次成功才视为服务就绪
+                    if (successCount >= 2) return true;
+                } else {
+                    successCount = 0;
+                }
+            } catch (e) {
+                successCount = 0;
+            }
+            await new Promise(r => setTimeout(r, 1000));
+        }
+        return false;
+    }
+
+    async function triggerRestart() {
+        try {
+            if (isTauri()) {
+                await invoke('restart_server');
+                // Soft restart: window stays open, polling handles the rest
+            } else {
+                // Web/Docker: 调用后端重启接口
+                // 使用原生 fetch 避免全局错误处理
+                const token = localStorage.getItem("auth_token");
+                await fetch(`${API_BASE}/api/system/restart`, {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                }).catch(() => {}); // 忽略请求中止错误（后端已重启）
+            }
+        } catch (e) {
+            console.error("Restart trigger failed", e);
+        }
+    }
+
     function triggerFileInput() {
         fileInput.click();
     }
@@ -68,8 +112,6 @@
     }
 
     let isRestoring = false;
-
-    // --- Post Restore ---
     let showPostRestoreDialog = false;
     let restoredUsername = "";
     
@@ -83,6 +125,7 @@
         
         isRestoreDialogOpen = false;
         isRestoring = true;
+        localStorage.setItem("is_restarting", "true"); // 防止 401 导致跳转
         const loadingToast = toast.loading("正在上传并恢复数据...", { duration: Infinity });
 
         try {
@@ -99,13 +142,31 @@
             toast.dismiss(loadingToast);
             
             if (res.ok) {
-                // Parse response to get username
                 const data = await res.json();
                 restoredUsername = data.username || "未知用户";
-                showPostRestoreDialog = true;
                 
-                selectedFile = null;
-                if (fileInput) fileInput.value = "";
+                if (data.token) {
+                    localStorage.setItem("auth_token", data.token);
+                }
+
+                // === 开始平滑重启流程 ===
+                isRestarting = true;
+                
+                // 1. 触发重启
+                triggerRestart();
+
+                // 2. 等待服务上线 (延迟 2秒开始检测，给后端一点关闭时间)
+                await new Promise(r => setTimeout(r, 2000));
+                const isBackOnline = await checkServerStatus();
+
+                if (isBackOnline) {
+                    toast.success(`恢复成功！欢迎回来，${restoredUsername}`);
+                    window.location.href = "/";
+                } else {
+                    toast.error("服务重启超时，请手动刷新页面");
+                    isRestarting = false;
+                }
+                return;
             } else {
                 const text = await res.text();
                 toast.error(`恢复失败: ${text}`);
@@ -116,6 +177,10 @@
             toast.error("恢复失败：网络错误");
         } finally {
             isRestoring = false;
+            // Note: isRestarting 保持为 true 直到页面刷新，防止用户操作
+            if (!isRestarting) { // 如果失败了（isRestarting被置为false），清除标志
+                localStorage.removeItem("is_restarting");
+            }
         }
     }
 
@@ -252,6 +317,8 @@
     </Tabs.Root>
 
     <!-- Restore Confirmation Dialog -->
+    <RestartOverlay visible={isRestarting} />
+
     <AlertDialog.Root open={isRestoreDialogOpen} onOpenChange={handleRestoreCancel}>
         <AlertDialog.Content>
             <AlertDialog.Header>

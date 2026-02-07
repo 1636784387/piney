@@ -40,13 +40,24 @@
             }
         }, 1000);
 
-        return () => clearInterval(timer);
+        // 15 秒后自动视为已滚动到底部（解决 Android WebView 滚动检测问题）
+        const scrollFallback = setTimeout(() => {
+            if (!hasScrolledToBottom) {
+                hasScrolledToBottom = true;
+                console.log('滚动检测备用机制启动：15秒超时');
+            }
+        }, 15000);
+
+        return () => {
+            clearInterval(timer);
+            clearTimeout(scrollFallback);
+        };
     });
 
     function handleScroll(e: Event) {
         const target = e.target as HTMLDivElement;
-        // Allow a small buffer (e.g. 20px)
-        if (target.scrollTop + target.clientHeight >= target.scrollHeight - 20) {
+        // 更宽松的底部检测（100px 缓冲区，兼容 Android WebView）
+        if (target.scrollTop + target.clientHeight >= target.scrollHeight - 100) {
             hasScrolledToBottom = true;
         }
     }

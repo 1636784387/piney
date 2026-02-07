@@ -34,17 +34,16 @@ pub async fn create_app(db: DatabaseConnection, mode: RunMode, config: ConfigSta
         .route("/settings", get(api::settings::get).with_state(db.clone()))
         .route("/health", get(|| async { "OK" }));
 
-    // Protected routes
-    let protected_api = api::routes(db.clone()).layer(middleware::from_fn_with_state(
-        config.clone(),
-        utils::auth_middleware::auth,
-    ));
+    // Protected routes (using db state only)
+    let protected_api = api::routes(db.clone(), config.clone()).layer(
+        middleware::from_fn_with_state(config.clone(), utils::auth_middleware::auth),
+    );
 
     // Combine
     let mut app = Router::new()
         .nest("/api", public_api.merge(protected_api))
         .layer(cors)
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024)); // 100MB 文件大小限制
+        .layer(DefaultBodyLimit::max(2000 * 1024 * 1024)); // 2GB 文件大小限制
 
     // Serve uploaded files
     app = app.nest_service(

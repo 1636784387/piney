@@ -9,26 +9,33 @@ use axum::{
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
 };
-use chrono::Local;
-use sea_orm::DatabaseConnection;
+use chrono::{Duration, Local, Utc};
+use jsonwebtoken::{encode, EncodingKey, Header};
+use sea_orm::{Database, DatabaseConnection};
 
 use flate2::read::GzDecoder;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fs;
 use tar::{Archive, Builder};
 use tokio::io::duplex;
 use tokio_util::io::{ReaderStream, SyncIoBridge}; // 用于流式传输
-use tracing::error;
+use tracing::{error, info};
+
+use crate::auth::Claims;
+use crate::config::ConfigState;
+
+/// 备份恢复所需的组合状态
+#[derive(Clone)]
+pub struct BackupState {
+    pub db: DatabaseConnection,
+    pub config: ConfigState,
+}
 
 #[derive(Serialize)]
 pub struct ImportResponse {
     username: String,
     message: String,
-}
-
-#[derive(Deserialize)]
-struct SimpleConfig {
-    username: String,
+    token: Option<String>, // 新增：恢复成功后返回新 Token
 }
 
 /// 获取 data 目录路径
@@ -70,8 +77,13 @@ pub async fn export_backup() -> Result<impl IntoResponse, (StatusCode, String)> 
             if let Ok(entries) = fs::read_dir(&data_dir_clone) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    // 忽略 temp 目录（虽然新版不再创建 temp 文件，但防御性编程保留）
-                    if path.file_name().and_then(|n| n.to_str()) == Some("temp") {
+                    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+                    // 跳过不应该备份的文件
+                    // - temp 目录
+                    // - config.yml (用户名/密码)
+                    // - .jwt_secret (JWT 密钥)
+                    if filename == "temp" || filename == "config.yml" || filename == ".jwt_secret" {
                         continue;
                     }
 
@@ -130,13 +142,13 @@ pub async fn export_backup() -> Result<impl IntoResponse, (StatusCode, String)> 
 
 /// POST /api/backup/import - 导入 .piney 备份文件并恢复数据
 pub async fn import_backup(
-    State(db): State<DatabaseConnection>,
+    State(state): State<BackupState>,
     mut multipart: Multipart,
 ) -> Result<Json<ImportResponse>, (StatusCode, String)> {
     // 0. 关闭数据库连接 (Fix: Windows file lock issue)
     // 必须确保在删除/覆盖 piney.db 前断开所有连接
     // 注意：这将导致后续请求直到重启前都无法访问数据库，这是预期的
-    if let Err(e) = db.close().await {
+    if let Err(e) = state.db.close().await {
         // Log but continue, sometimes it might be already closed or fail to close cleanly
         error!("尝试关闭数据库连接失败: {}", e);
     }
@@ -185,11 +197,11 @@ pub async fn import_backup(
 
     let data_dir = get_data_dir();
 
-    // 3. 执行清空、解压、读取配置、清理密钥
+    // 3. 执行清空、解压、读取配置
     let data_clone = data.clone();
     let data_dir_clone = data_dir.clone();
 
-    let username = tokio::task::spawn_blocking(move || -> Result<String, String> {
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
         // A. 清空 data 目录
         let entries =
             fs::read_dir(&data_dir_clone).map_err(|e| format!("读取数据目录失败: {}", e))?;
@@ -198,25 +210,29 @@ pub async fn import_backup(
             let path = entry.path();
             let filename = path.file_name().unwrap_or_default().to_string_lossy();
 
-            // 跳过 .DS_Store
-            if filename.starts_with('.') {
+            // 跳过一些不应该删除的文件
+            // - config.yml (用户名/密码) - 保留当前配置
+            // - .jwt_secret (JWT 密钥) - 保留当前登录状态
+            // - .DS_Store (系统文件)
+            if filename == "config.yml" || filename == ".jwt_secret" || filename == ".DS_Store" {
                 continue;
             }
 
             if path.is_dir() {
-                fs::remove_dir_all(&path)
-                    .map_err(|e| format!("删除目录 {} 失败: {}", path.display(), e))?;
-            } else {
-                let _ = fs::remove_file(&path);
+                if let Err(e) = fs::remove_dir_all(&path) {
+                    tracing::warn!("删除目录 {:?} 失败: {}", path, e);
+                }
+            } else if let Err(e) = fs::remove_file(&path) {
+                tracing::warn!("删除文件 {:?} 失败: {}", path, e);
             }
         }
 
-        // B. 解压备份到 data 目录
-        // 尝试自动检测格式：如果读取前两个字节是 Gzip 头 (0x1f 0x8b)，则使用 Gzip 解压
-        // 否则当作普通 Tar 文件处理
-        let is_gzip = data_clone.len() >= 2 && data_clone[0] == 0x1f && data_clone[1] == 0x8b;
+        // B. 解压备份
+        // 先尝试 gzip，否则 plain tar
+        let decoder = GzDecoder::new(&data_clone[..]);
+        let is_gz = decoder.header().is_some();
 
-        if is_gzip {
+        if is_gz {
             let decoder = GzDecoder::new(&data_clone[..]);
             let mut archive = Archive::new(decoder);
             let entries = archive
@@ -224,6 +240,17 @@ pub async fn import_backup(
                 .map_err(|e| format!("读取归档失败: {}", e))?;
             for entry in entries {
                 let mut entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+
+                // 跳过不应该恢复的文件（兼容旧备份）
+                let entry_path = entry.path().map_err(|e| format!("读取路径失败: {}", e))?;
+                let entry_name = entry_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+                if entry_name == "config.yml" || entry_name == ".jwt_secret" {
+                    continue;
+                }
+
                 entry.set_preserve_permissions(false);
                 entry.set_preserve_mtime(false);
                 entry
@@ -237,6 +264,17 @@ pub async fn import_backup(
                 .map_err(|e| format!("读取归档失败: {}", e))?;
             for entry in entries {
                 let mut entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+
+                // 跳过不应该恢复的文件（兼容旧备份）
+                let entry_path = entry.path().map_err(|e| format!("读取路径失败: {}", e))?;
+                let entry_name = entry_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+                if entry_name == "config.yml" || entry_name == ".jwt_secret" {
+                    continue;
+                }
+
                 entry.set_preserve_permissions(false);
                 entry.set_preserve_mtime(false);
                 entry
@@ -245,26 +283,10 @@ pub async fn import_backup(
             }
         }
 
-        // C. 读取恢复后的 config.yml 中的用户名
-        let config_path = data_dir_clone.join("config.yml");
-        let mut username = "admin".to_string(); // 默认值
+        // 不再需要从恢复的 config.yml 读取用户名，因为我们不覆盖 config.yml
+        // 用户名将从当前配置中获取
 
-        if config_path.exists() {
-            if let Ok(content) = fs::read_to_string(&config_path) {
-                // 简单解析 yaml
-                if let Ok(cfg) = serde_yaml::from_str::<SimpleConfig>(&content) {
-                    username = cfg.username;
-                }
-            }
-        }
-
-        // D. 强制清理 .jwt_secret (确保用户退出登录)
-        let secret_path = data_dir_clone.join(".jwt_secret");
-        if secret_path.exists() {
-            let _ = fs::remove_file(secret_path);
-        }
-
-        Ok(username)
+        Ok(())
     })
     .await
     .map_err(|e| {
@@ -275,9 +297,65 @@ pub async fn import_backup(
     })?
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    // 5. 返回成功信息
+    // 4. 刷新配置（重新从文件加载用户名/密码，并重新生成 JWT Secret）
+    if let Err(e) = state.config.reload() {
+        error!("配置刷新失败: {}", e);
+        // 不返回错误，继续尝试返回成功信息（用户可能需要重启）
+    } else {
+        info!("配置已刷新");
+    }
+
+    // 5. 重新连接数据库（验证恢复后的数据库是否可用）
+    let db_path = get_data_dir().join("piney.db");
+    let db_url = format!("sqlite://{}?mode=rwc", db_path.to_string_lossy());
+
+    match Database::connect(&db_url).await {
+        Ok(_new_db) => {
+            info!("数据库重新连接成功");
+            // 注意：这里的新连接会在函数结束后 drop，
+            // 但验证了数据库文件是完整的
+        }
+        Err(e) => {
+            error!("数据库重新连接失败: {}", e);
+            // 继续返回成功，但提示用户可能需要重启
+        }
+    }
+
+    // 6. 从当前配置获取用户名并生成新的 JWT Token
+    let username = state
+        .config
+        .get()
+        .map(|c| c.username)
+        .unwrap_or_else(|| "admin".to_string());
+
+    let token = {
+        let expiration = Utc::now()
+            .checked_add_signed(Duration::days(90))
+            .expect("valid timestamp")
+            .timestamp();
+
+        let claims = Claims {
+            sub: username.clone(),
+            exp: expiration as usize,
+        };
+
+        match encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(state.config.get_jwt_secret().as_bytes()),
+        ) {
+            Ok(t) => Some(t),
+            Err(e) => {
+                error!("生成 Token 失败: {}", e);
+                None
+            }
+        }
+    };
+
+    // 7. 返回成功信息
     Ok(Json(ImportResponse {
         username,
         message: "数据恢复成功".to_string(),
+        token,
     }))
 }

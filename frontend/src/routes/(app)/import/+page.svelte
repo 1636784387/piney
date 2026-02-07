@@ -5,6 +5,7 @@
         Upload,
         FileJson,
         FileImage,
+        FileArchive,
         Loader2,
         CheckCircle2,
         XCircle,
@@ -25,6 +26,7 @@
     import { API_BASE } from "$lib/api";
     import { Progress } from "$lib/components/ui/progress";
     import { breadcrumbs } from "$lib/stores/breadcrumb";
+    import JSZip from "jszip";
 
     let dragging = false;
     let uploading = false;
@@ -85,20 +87,81 @@
         target.value = "";
     }
 
-    async function uploadFiles(files: FileList) {
+    async function extractZip(file: File): Promise<File[]> {
+        try {
+            const zip = await JSZip.loadAsync(file);
+            const extractedFiles: File[] = [];
+            
+            const entries: Array<Promise<void>> = [];
+
+            zip.forEach((relativePath, entry) => {
+                entries.push((async () => {
+                    if (entry.dir) return;
+                    
+                    // 过滤隐藏文件和系统文件
+                    const name = entry.name;
+                    if (name.startsWith('__MACOSX') || name.includes('/.') || name.startsWith('.')) return;
+
+                    // 过滤非目标格式
+                    const lowerName = name.toLowerCase();
+                    if (!lowerName.endsWith('.png') && !lowerName.endsWith('.json')) return;
+
+                    try {
+                        const blob = await entry.async('blob');
+                        // 使用 basename 防止文件名过长或包含非法字符，重名校验交给后端
+                        const fileName = name.split('/').pop() || name;
+                        const newFile = new File([blob], fileName, { type: blob.type });
+                        extractedFiles.push(newFile);
+                    } catch (e) {
+                         console.error(`Failed to extract ${name}`, e);
+                    }
+                })());
+            });
+
+            await Promise.all(entries);
+            return extractedFiles;
+        } catch (e) {
+            console.error("ZIP extraction failed", e);
+            toast.error(`解压失败: ${file.name}`);
+            return [];
+        }
+    }
+
+    async function uploadFiles(rawFiles: FileList) {
         uploading = true;
         importResults = []; // Clear previous results
         successCount = 0;
         failCount = 0;
 
         try {
+            // 1. 预处理：展开 ZIP
+            let files: File[] = [];
+            for (const file of Array.from(rawFiles)) {
+                if (file.name.toLowerCase().endsWith('.zip') || 
+                    file.type === 'application/zip' || 
+                    file.type === 'application/x-zip-compressed') {
+                    
+                    toast.info(`正在解压 ${file.name}...`);
+                    const extracted = await extractZip(file);
+                    files.push(...extracted);
+                } else {
+                    files.push(file);
+                }
+            }
+
+            if (files.length === 0) {
+                toast.warning("没有找到有效的导入文件");
+                uploading = false;
+                return;
+            }
+
             // Calculate total files for progress bar
             totalFilesCount = files.length;
             currentFileIndex = 0;
             progress = 0;
 
             // Validate files first
-            const filePromises = Array.from(files).map((file) => {
+            const filePromises = files.map((file) => {
                 return new Promise<{
                     file: File;
                     valid: boolean;
@@ -296,7 +359,7 @@
                     id="file-upload"
                     type="file"
                     multiple
-                    accept={importType === "card" ? ".png,.json" : ".json"}
+                    accept={importType === "card" ? ".png,.json,.zip" : ".json,.zip"}
                     class="hidden"
                     on:change={handleFileSelect}
                 />
@@ -334,6 +397,9 @@
                     {/if}
                     <div class="flex items-center gap-1">
                         <FileJson class="w-4 h-4" /> JSON
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <FileArchive class="w-4 h-4" /> ZIP
                     </div>
                 </div>
             </div>

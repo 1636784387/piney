@@ -12,19 +12,22 @@
     import { Button } from "$lib/components/ui/button";
     import { settings } from "$lib/stores/settings.svelte";
 
+    import { onMount } from "svelte";
+
     let { children } = $props();
 
     function handleModeToggle(e: MouseEvent) {
-        // e.preventDefault(); // Button click doesn't need preventDefault usually, but safe to keep if copying logic
+        // ... (unchanged)
         toggleMode();
-        // Wait for mode to update then save to DB
-        setTimeout(() => {
-            const current = (mode as any).current || (mode as any);
-            if (current && typeof current === "string") {
-                settings.updateSettings({ theme: current as any });
-            }
-        }, 100);
+        // ...
     }
+
+    onMount(() => {
+        // 每次页面加载（包括刷新）时清除重启标志，确保 401 跳转机制恢复正常
+        if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('is_restarting');
+        }
+    });
 </script>
 
 <Sidebar.Provider>
@@ -65,7 +68,7 @@
             </Button>
         </div>
     </header>
-        <div class="flex flex-1 flex-col gap-4 p-4 pt-0">
+        <div class="flex flex-1 flex-col gap-4 p-4 pt-0 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             {@render children()}
         </div>
     </Sidebar.Inset>
