@@ -49,9 +49,14 @@ export async function downloadFile(options: DownloadOptions) {
                     await writeFile(filePath, content);
                 }
             } else if (url) {
-                // 使用 Rust 后端下载，避免 WebView 内存限制 (OOM)
-                const { invoke } = await import('@tauri-apps/api/core');
-                await invoke('download_large_file', { url, filePath });
+                // 使用 fetch 下载并通过 Tauri fs 插件写入文件
+                // 这样可以：1) 传递 auth headers  2) 兼容 Android 路径
+                const response = await fetch(url, fetchOptions);
+                if (!response.ok) {
+                    throw new Error(`Request failed with status: ${response.status} ${response.statusText}`);
+                }
+                const buffer = await response.arrayBuffer();
+                await writeFile(filePath, new Uint8Array(buffer));
             }
 
             toast.dismiss(toastId);

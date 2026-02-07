@@ -60,11 +60,14 @@ jobs:
           # 1. Decode Keystore
           echo "$ANDROID_KEY_STORE_BASE64" | base64 --decode > ${{ github.workspace }}/piney-key.jks
           
-          # 2. Create android-signing.properties in root (referenced by build.gradle.kts)
-          echo "key.store=${{ github.workspace }}/piney-key.jks" > android-signing.properties
-          echo "key.alias=$ANDROID_KEY_ALIAS" >> android-signing.properties
-          echo "key.alias.password=$ANDROID_KEY_PASSWORD" >> android-signing.properties
-          echo "key.store.password=$ANDROID_STORE_PASSWORD" >> android-signing.properties
+          # 2. Create android-signing.properties in parent of workspace
+          # build.gradle.kts uses "../../../../../android-signing.properties" from app/
+          # app/ -> android/ -> gen/ -> src-tauri/ -> project root -> parent (5 levels)
+          # So we need to create it in the parent of project root
+          echo "key.store=${{ github.workspace }}/piney-key.jks" > ${{ github.workspace }}/../android-signing.properties
+          echo "key.alias=$ANDROID_KEY_ALIAS" >> ${{ github.workspace }}/../android-signing.properties
+          echo "key.alias.password=$ANDROID_KEY_PASSWORD" >> ${{ github.workspace }}/../android-signing.properties
+          echo "key.store.password=$ANDROID_STORE_PASSWORD" >> ${{ github.workspace }}/../android-signing.properties
 
       - name: Build Android APK
         env:
