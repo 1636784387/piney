@@ -42,7 +42,7 @@
 			data-sidebar="sidebar"
 			data-slot="sidebar"
 			data-mobile="true"
-			class="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
+			class="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] [&>button]:hidden"
 			style="--sidebar-width: {SIDEBAR_WIDTH_MOBILE};"
 			{side}
 		>

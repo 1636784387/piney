@@ -14,7 +14,7 @@ use jsonwebtoken::{encode, EncodingKey, Header};
 use sea_orm::{Database, DatabaseConnection};
 
 use flate2::read::GzDecoder;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fs;
 use tar::{Archive, Builder};
 use tokio::io::duplex;

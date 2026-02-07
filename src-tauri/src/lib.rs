@@ -1,15 +1,32 @@
 //! Tauri 库入口
 
+use std::sync::Arc;
 use tauri::Manager;
+use tokio::sync::Notify;
+
+pub struct ServerControl {
+    pub restart_trigger: Notify,
+}
+
+mod commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let server_control = Arc::new(ServerControl {
+        restart_trigger: Notify::new(),
+    });
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
-        .setup(|_app| {
-            // 0. 全局 Panic 捕获 (调试用)
+        .plugin(tauri_plugin_process::init())
+        .manage(server_control.clone())
+        .invoke_handler(tauri::generate_handler![
+            commands::download_large_file,
+            commands::restart_server
+        ])
+        .setup(move |_app| {
             std::panic::set_hook(Box::new(|info| {
                 let msg = format!("Panic occurred: {:?}", info);
                 let _ = std::fs::write("panic_crash.txt", msg);
@@ -134,12 +151,13 @@ pub fn run() {
             // 如果是 true，说明后端已在运行，跳过
             if !BACKEND_RUNNING.swap(true, Ordering::SeqCst) {
                 let log_clone = log.clone();
+                let params_control = server_control.clone(); // Capture for thread
                 log("Spawning backend thread...");
                 std::thread::spawn(move || {
                     let rt = tokio::runtime::Runtime::new().unwrap();
                     rt.block_on(async {
                         log_clone("Backend thread started.");
-                        if let Err(e) = start_backend(log_clone.clone()).await {
+                        if let Err(e) = start_backend(log_clone.clone(), params_control).await {
                             log_clone(&format!("Backend CRASHED: {}", e));
                             eprintln!("后端启动失败: {}", e);
                         } else {
@@ -160,83 +178,103 @@ pub fn run() {
         .expect("运行 Tauri 应用时出错");
 }
 
-async fn start_backend<F>(log: F) -> anyhow::Result<()>
+async fn start_backend<F>(log: F, control: Arc<ServerControl>) -> anyhow::Result<()>
 where
     F: Fn(&str) + Clone + Send + Sync + 'static,
 {
-    // 数据库初始化 (带重试逻辑，解决 Android 上的瞬时故障)
-    log("Initializing database...");
-    let mut db_retries = 10;
-    let db = loop {
-        match piney::db::init_database().await {
-            Ok(d) => {
-                log("Database initialized successfully.");
-                break d;
-            }
-            Err(e) => {
-                db_retries -= 1;
-                if db_retries <= 0 {
-                    log(&format!("Database init failed after 10 retries: {}", e));
-                    return Err(e.into());
+    loop {
+        // 数据库初始化 (带重试逻辑，解决 Android 上的瞬时故障)
+        log("Initializing database...");
+        let mut db_retries = 10;
+        let db = loop {
+            match piney::db::init_database().await {
+                Ok(d) => {
+                    log("Database initialized successfully.");
+                    break d;
                 }
-                log(&format!(
-                    "Database init failed: {}, retrying in 1s... ({} retries left)",
-                    e, db_retries
-                ));
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            }
-        }
-    };
-
-    // 2. 运行模式
-    let mode = piney::utils::mode_detect::RunMode::App;
-
-    // 3. 初始化 Config
-    let config_path = piney::utils::paths::get_data_path("config.yml");
-    log(&format!("Loading config from: {:?}", config_path));
-
-    let config = piney::config::ConfigState::new(&config_path.to_string_lossy());
-    if config.is_initialized() {
-        log("Config loaded: 已初始化 (用户已注册)");
-    } else {
-        log("Config loaded: 未初始化 (需要注册)");
-    }
-
-    // 4. 创建 Axum 应用
-    log("Creating Axum app...");
-    let app = piney::create_app(db, mode, config).await;
-
-    // 5. 启动侦听
-    let port = 9696;
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
-
-    log(&format!("Binding to address: {}", addr));
-
-    let mut port_retries = 0;
-    let listener = loop {
-        match tokio::net::TcpListener::bind(addr).await {
-            Ok(l) => {
-                if port_retries > 0 {
+                Err(e) => {
+                    db_retries -= 1;
+                    if db_retries <= 0 {
+                        log(&format!("Database init failed after 10 retries: {}", e));
+                        return Err(e.into());
+                    }
                     log(&format!(
-                        "Port {} bound successfully after {} retries",
-                        port, port_retries
+                        "Database init failed: {}, retrying in 1s... ({} retries left)",
+                        e, db_retries
                     ));
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
-                break l;
             }
-            Err(e) => {
-                port_retries += 1;
-                log(&format!(
-                    "[RETRY {}] Failed to bind port {}: {}, retrying in 1s...",
-                    port_retries, port, e
-                ));
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            }
+        };
+
+        // 2. 运行模式
+        let mode = piney::utils::mode_detect::RunMode::App;
+
+        // 3. 初始化 Config
+        let config_path = piney::utils::paths::get_data_path("config.yml");
+        log(&format!("Loading config from: {:?}", config_path));
+
+        let config = piney::config::ConfigState::new(&config_path.to_string_lossy());
+        if config.is_initialized() {
+            log("Config loaded: 已初始化 (用户已注册)");
+        } else {
+            log("Config loaded: 未初始化 (需要注册)");
         }
-    };
 
-    log("Server listening. Entering loop...");
-    axum::serve(listener, app).await?;
+        // 4. 创建 Axum 应用
+        log("Creating Axum app...");
+        let app = piney::create_app(db, mode, config).await;
 
-    Ok(())
+        // 5. 启动侦听
+        let port = 9696;
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+
+        log(&format!("Binding to address: {}", addr));
+
+        let mut port_retries = 0;
+        let listener = loop {
+            match tokio::net::TcpListener::bind(addr).await {
+                Ok(l) => {
+                    if port_retries > 0 {
+                        log(&format!(
+                            "Port {} bound successfully after {} retries",
+                            port, port_retries
+                        ));
+                    }
+                    break l;
+                }
+                Err(e) => {
+                    port_retries += 1;
+                    log(&format!(
+                        "[RETRY {}] Failed to bind port {}: {}, retrying in 1s...",
+                        port_retries, port, e
+                    ));
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+            }
+        };
+
+        log("Server listening. Entering loop...");
+
+        // 优雅关闭信号
+        let shutdown_signal = {
+            let control = control.clone();
+            let log = log.clone();
+            async move {
+                control.restart_trigger.notified().await;
+                log("Received restart signal. Shutting down Axum...");
+            }
+        };
+
+        if let Err(e) = axum::serve(listener, app)
+            .with_graceful_shutdown(shutdown_signal)
+            .await
+        {
+            log(&format!("Server error: {}", e));
+            // 如果是严重错误可能需要退出，但这里假设是重启信号或临时错误
+        }
+
+        log("Axum server stopped. Restarting in 1s...");
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
 }

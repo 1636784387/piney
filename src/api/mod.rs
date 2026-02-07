@@ -13,6 +13,7 @@ pub mod image_categories;
 pub mod images;
 pub mod quick_reply;
 pub mod settings;
+pub mod system;
 pub mod theater;
 pub mod upload;
 pub mod versions;
@@ -41,6 +42,7 @@ pub fn routes(db: DatabaseConnection, config: ConfigState) -> Router {
     let compressed_routes = Router::new()
         // 设置
         .route("/settings", patch(settings::update))
+        .route("/system/restart", post(system::restart))
         // 仪表盘
         .route("/dashboard", get(dashboard::get_dashboard_stats))
         .route("/gacha/draw", post(dashboard::start_gacha))
