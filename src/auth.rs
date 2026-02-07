@@ -40,8 +40,8 @@ pub struct StatusResponse {
 // Claims
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    sub: String,
-    exp: usize,
+    pub sub: String,
+    pub exp: usize,
 }
 
 // Handlers

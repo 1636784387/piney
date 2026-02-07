@@ -99,9 +99,20 @@
             toast.dismiss(loadingToast);
             
             if (res.ok) {
-                // Parse response to get username
+                // Parse response to get username and new token
                 const data = await res.json();
                 restoredUsername = data.username || "未知用户";
+                
+                // 保存新 Token（如果返回了）
+                if (data.token) {
+                    localStorage.setItem("auth_token", data.token);
+                    toast.success(`数据恢复成功！欢迎回来，${restoredUsername}`);
+                    // 直接跳转到首页
+                    window.location.href = "/";
+                    return;
+                }
+                
+                // 如果没有返回 Token，显示旧的重启提示对话框
                 showPostRestoreDialog = true;
                 
                 selectedFile = null;

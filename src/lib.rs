@@ -34,11 +34,10 @@ pub async fn create_app(db: DatabaseConnection, mode: RunMode, config: ConfigSta
         .route("/settings", get(api::settings::get).with_state(db.clone()))
         .route("/health", get(|| async { "OK" }));
 
-    // Protected routes
-    let protected_api = api::routes(db.clone()).layer(middleware::from_fn_with_state(
-        config.clone(),
-        utils::auth_middleware::auth,
-    ));
+    // Protected routes (using db state only)
+    let protected_api = api::routes(db.clone(), config.clone()).layer(
+        middleware::from_fn_with_state(config.clone(), utils::auth_middleware::auth),
+    );
 
     // Combine
     let mut app = Router::new()

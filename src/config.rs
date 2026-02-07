@@ -24,7 +24,7 @@ pub struct AppConfig {
 #[derive(Clone)]
 pub struct ConfigState {
     config: Arc<RwLock<Option<AppConfig>>>,
-    jwt_secret: String, // 在内存中保存
+    jwt_secret: Arc<RwLock<String>>, // 使用 RwLock 以支持运行时刷新
     file_path: String,
 }
 
@@ -133,7 +133,7 @@ impl ConfigState {
 
         Self {
             config: Arc::new(RwLock::new(config)),
-            jwt_secret,
+            jwt_secret: Arc::new(RwLock::new(jwt_secret)),
             file_path: file_path.to_string(),
         }
     }
@@ -144,7 +144,7 @@ impl ConfigState {
 
     // 获取 JWT Secret
     pub fn get_jwt_secret(&self) -> String {
-        self.jwt_secret.clone()
+        self.jwt_secret.read().unwrap().clone()
     }
 
     pub fn is_initialized(&self) -> bool {
@@ -169,6 +169,32 @@ impl ConfigState {
         fs::write(&self.file_path, content)?;
 
         *self.config.write().unwrap() = Some(new_config);
+        Ok(())
+    }
+
+    /// 重新加载配置（用于数据恢复后刷新内存状态）
+    /// 同时会重新生成 JWT Secret，使旧 Token 失效
+    pub fn reload(&self) -> Result<()> {
+        // 1. 重新读取配置文件
+        if Path::new(&self.file_path).exists() {
+            let content = fs::read_to_string(&self.file_path)?;
+            let new_config: AppConfig = serde_yaml::from_str(&content)?;
+            *self.config.write().unwrap() = Some(new_config);
+            info!("配置已从文件重新加载");
+        } else {
+            *self.config.write().unwrap() = None;
+            info!("配置文件不存在，已清除内存配置");
+        }
+
+        // 2. 强制重新生成 JWT Secret（删除旧文件，生成新的）
+        let secret_path = crate::utils::paths::get_data_path(".jwt_secret");
+        if secret_path.exists() {
+            let _ = fs::remove_file(&secret_path);
+        }
+        let new_secret = crate::utils::secret::get_jwt_secret();
+        *self.jwt_secret.write().unwrap() = new_secret;
+        info!("JWT Secret 已重新生成");
+
         Ok(())
     }
 }
