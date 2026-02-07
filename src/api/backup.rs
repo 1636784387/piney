@@ -38,11 +38,6 @@ pub struct ImportResponse {
     token: Option<String>, // 新增：恢复成功后返回新 Token
 }
 
-#[derive(Deserialize)]
-struct SimpleConfig {
-    username: String,
-}
-
 /// 获取 data 目录路径
 fn get_data_dir() -> std::path::PathBuf {
     crate::utils::paths::get_data_path("")
@@ -82,8 +77,13 @@ pub async fn export_backup() -> Result<impl IntoResponse, (StatusCode, String)> 
             if let Ok(entries) = fs::read_dir(&data_dir_clone) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    // 忽略 temp 目录（虽然新版不再创建 temp 文件，但防御性编程保留）
-                    if path.file_name().and_then(|n| n.to_str()) == Some("temp") {
+                    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+                    // 跳过不应该备份的文件
+                    // - temp 目录
+                    // - config.yml (用户名/密码)
+                    // - .jwt_secret (JWT 密钥)
+                    if filename == "temp" || filename == "config.yml" || filename == ".jwt_secret" {
                         continue;
                     }
 
@@ -201,7 +201,7 @@ pub async fn import_backup(
     let data_clone = data.clone();
     let data_dir_clone = data_dir.clone();
 
-    let username = tokio::task::spawn_blocking(move || -> Result<String, String> {
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
         // A. 清空 data 目录
         let entries =
             fs::read_dir(&data_dir_clone).map_err(|e| format!("读取数据目录失败: {}", e))?;
@@ -210,9 +210,11 @@ pub async fn import_backup(
             let path = entry.path();
             let filename = path.file_name().unwrap_or_default().to_string_lossy();
 
-            // 跳过一些不应该删除的文件（如正在读取的文件）
-            // 注意: 这里不再跳过 .jwt_secret，因为我们后面会通过 config.reload() 重新生成
-            if filename.starts_with(".DS_Store") {
+            // 跳过一些不应该删除的文件
+            // - config.yml (用户名/密码) - 保留当前配置
+            // - .jwt_secret (JWT 密钥) - 保留当前登录状态
+            // - .DS_Store (系统文件)
+            if filename == "config.yml" || filename == ".jwt_secret" || filename == ".DS_Store" {
                 continue;
             }
 
@@ -238,6 +240,17 @@ pub async fn import_backup(
                 .map_err(|e| format!("读取归档失败: {}", e))?;
             for entry in entries {
                 let mut entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+
+                // 跳过不应该恢复的文件（兼容旧备份）
+                let entry_path = entry.path().map_err(|e| format!("读取路径失败: {}", e))?;
+                let entry_name = entry_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+                if entry_name == "config.yml" || entry_name == ".jwt_secret" {
+                    continue;
+                }
+
                 entry.set_preserve_permissions(false);
                 entry.set_preserve_mtime(false);
                 entry
@@ -251,6 +264,17 @@ pub async fn import_backup(
                 .map_err(|e| format!("读取归档失败: {}", e))?;
             for entry in entries {
                 let mut entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+
+                // 跳过不应该恢复的文件（兼容旧备份）
+                let entry_path = entry.path().map_err(|e| format!("读取路径失败: {}", e))?;
+                let entry_name = entry_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+                if entry_name == "config.yml" || entry_name == ".jwt_secret" {
+                    continue;
+                }
+
                 entry.set_preserve_permissions(false);
                 entry.set_preserve_mtime(false);
                 entry
@@ -259,22 +283,10 @@ pub async fn import_backup(
             }
         }
 
-        // C. 读取恢复后的 config.yml 中的用户名
-        let config_path = data_dir_clone.join("config.yml");
-        let mut username = "admin".to_string(); // 默认值
+        // 不再需要从恢复的 config.yml 读取用户名，因为我们不覆盖 config.yml
+        // 用户名将从当前配置中获取
 
-        if config_path.exists() {
-            if let Ok(content) = fs::read_to_string(&config_path) {
-                // 简单解析 yaml
-                if let Ok(cfg) = serde_yaml::from_str::<SimpleConfig>(&content) {
-                    username = cfg.username;
-                }
-            }
-        }
-
-        // 注意：不再在这里删除 .jwt_secret，改由 config.reload() 统一处理
-
-        Ok(username)
+        Ok(())
     })
     .await
     .map_err(|e| {
@@ -309,7 +321,13 @@ pub async fn import_backup(
         }
     }
 
-    // 6. 生成新的 JWT Token
+    // 6. 从当前配置获取用户名并生成新的 JWT Token
+    let username = state
+        .config
+        .get()
+        .map(|c| c.username)
+        .unwrap_or_else(|| "admin".to_string());
+
     let token = {
         let expiration = Utc::now()
             .checked_add_signed(Duration::days(90))
